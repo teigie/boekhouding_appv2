@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Upload{% endblock %}
+{% block content %}
+  <h1>Bankafschrift uploaden</h1>
+  <p class="muted">De rekening in het bestand moet al aan jou gekoppeld zijn op de Rekeningen-pagina.</p>
+
+  {% if parse_error %}
+    <p class="error">Kon dit bestand niet lezen: {{ parse_error }}</p>
+  {% endif %}
+
+  {% if results %}
+    <section class="card">
+      <h2>Resultaat</h2>
+      <ul>
+        {% for r in results %}
+          <li class="{{ 'result-ok' if r.accepted else 'result-fail' }}">
+            <strong>{{ r.rekening }}</strong> —
+            {% if r.accepted %}
+              geaccepteerd, {{ r.row_count }} rij(en) toegevoegd.
+            {% else %}
+              afgewezen: {{ r.reason }}
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="card">
+    <form method="post" action="/upload" enctype="multipart/form-data">
+      <label>Formaat<br>
+        <select name="format_id">
+          {% for importer in importers %}
+            <option value="{{ importer.format_id }}">{{ importer.display_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Bestand<br><input type="file" name="file" required accept=".csv"></label>
+      <button type="submit">Uploaden</button>
+    </form>
+  </section>
+{% endblock %}

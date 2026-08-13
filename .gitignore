@@ -1,0 +1,26 @@
+# Database (generated locally from sql/schema.sql + sql/seed_data.sql — never committed)
+/data/*.db
+/data/*.sqlite3
+/data/*.db-journal
+
+# Session-signing secret (generated on first run — see app/session.py)
+/data/.session_secret
+
+# Logs (runtime output — technical log + data-change audit trail)
+/logs/*.log
+/logs/*.log.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Dashboard{% endblock %}
+{% block content %}
+  <h1>Systeem actief</h1>
+  <p class="muted">
+    Database verbonden. Upload-, controle- en migratieschermen komen hier
+    in latere stappen — zie <code>docs/ARCHITECTURE.md</code> voor het plan.
+  </p>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Rekeningen</h2>
+      {% if rekeningen %}
+        <ul>
+          {% for r in rekeningen %}
+            <li>{{ r["name"] }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Nog geen rekeningen — koppel er een op de <a href="/accounts">Rekeningen</a>-pagina.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Categorieën</h2>
+      <ul>
+        {% for c in categorieen %}
+          <li>{{ c["Name"] }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
+{% endblock %}

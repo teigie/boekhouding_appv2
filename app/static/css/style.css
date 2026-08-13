@@ -1,0 +1,136 @@
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #1a1d23;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1d2026;
+    --text: #e7e9ec;
+    --muted: #9aa1ab;
+    --border: #2b2f37;
+    --accent: #5b8def;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar__brand {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.topbar__nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+code {
+  background: var(--border);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.error {
+  color: #d64545;
+  font-weight: 500;
+}
+
+.result-ok { color: #2a9d5c; }
+.result-fail { color: #d64545; }
+
+form label {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 0.9rem;
+}
+
+form input,
+form select {
+  display: block;
+  margin-top: 0.3rem;
+  width: 100%;
+  max-width: 320px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+form button,
+.link-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.inline-form {
+  display: inline;
+}
+
+.link-button {
+  background: none;
+  color: var(--muted);
+  padding: 0;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
