@@ -8,7 +8,7 @@ Two distinct loggers, kept separate on purpose:
 
 - "audit" — a record of what happened to the *data*: an upload was
   received, a row was rejected by the dedup/continuity check, an
-  enrichment run resolved/flagged N rows, a migration moved N rows for
+  categorization run resolved/flagged N rows, a migration moved N rows for
   account X into afschrift. Written to logs/audit.log (rotating) only —
   this is a durable trail for an accounting app, not a debugging stream,
   so it deliberately stays out of the console.

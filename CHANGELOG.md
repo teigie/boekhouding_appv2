@@ -146,3 +146,71 @@ UI, ledger viewing/reporting.
   per-account and why — the previous "reconstructs a valid global order"
   phrasing was ambiguous enough to read as cross-account ordering, which
   is exactly what prompted the concern.
+
+### 2026-08-14 — Categorization (`temp_afschrift2` → `temp_afschrift`)
+
+- Renamed this pipeline stage from "enrichment"/"verrijking" to
+  "categorization"/"categorisering" everywhere it's a living reference
+  (`README.md`, `docs/ARCHITECTURE.md`, `sql/README.md` and friends,
+  code comments) — `sql/enrichment/` moved to `sql/categorization/` via
+  `git mv`. Historical `CHANGELOG.md` entries above were left as-is.
+- Loaded `sql/optional/example_keywords.sql`'s 16 example keywords into
+  the dev database, to have real data to categorize against.
+- Corrected `processed`'s documented meaning: it reflects only the
+  category-match outcome, not FK resolution. `Rekening_ID`/`Mutatiesoort_ID`
+  resolve independently and are always expected to succeed — an unmapped
+  `Mutatiesoort` now rejects the whole upload batch (see below) rather
+  than landing as `processed = 0`. `temp_afschrift.Mutatiesoort_ID` stayed
+  `NOT NULL` on purpose to match.
+- Added `afschrift_cat_mededeling_keywords` (schema.sql): category
+  keywords/phrases matched against `Mededeling` (up to 200 chars, since
+  these can be full phrases, not just merchant names), separate from the
+  existing `afschrift_cat_keywords` (`Naam`-only, up to 30 chars).
+  "Simple" categorization checks `Naam`; "difficult" categorization checks
+  `Mededeling` — both always run for every row, and their matched
+  categories are unioned into one set per row before deciding `processed`
+  (0 = no match, 1 = exactly one, 2 = ambiguous). This combination
+  strategy is explicitly provisional — flagged as likely to change in
+  `sql/categorization/README.md`.
+- Added `sql/categorization/`: `match_naam_keywords.sql` and
+  `match_mededeling_keywords.sql` (standalone per-field match queries),
+  `categorize_batch.sql` (the real pipeline step — one account's entire
+  `temp_afschrift2` backlog resolved and inserted into `temp_afschrift` in
+  a single `INSERT ... SELECT`, preserving row order, `RETURNING
+  processed` so the caller can tally outcomes without a second query),
+  and `clear_temp_afschrift2.sql` (drains the now-categorized backlog).
+- Added `app/categorization.py`: `categorize_pending(rekening_text)` runs
+  one account's full backlog atomically and returns
+  resolved/unresolved/ambiguous counts, or `None` if nothing was pending.
+- Added a second kind of upload gate to `app/upload.py`, pre-insert this
+  time (unlike the existing post-insert balance-chain/dedup checks):
+  every row's `Mutatiesoort` must already resolve via the new
+  `sql/queries/mutatiesoorten/find_by_name.sql`, mirroring how `Rekening`
+  was already checked before any insert. An unmapped `Mutatiesoort`
+  rejects the entire batch, nothing is inserted — consistent with
+  `mutatiesoort_mapping` being complete structural reference data, not
+  something a row's manual review should have to fix.
+- Wired categorization into the upload pipeline: right after an account's
+  batch commits to `temp_afschrift2`, `app/upload.py` immediately calls
+  `categorize_pending()` for that account, so a successful upload response
+  already reflects the categorized (resolved/unresolved/ambiguous) counts.
+  No separate trigger or UI step. Categorization runs on its own
+  connection as its own atomic step — a failure there doesn't undo the
+  already-committed upload, the rows just stay in `temp_afschrift2` for
+  the next attempt (expected not to happen in practice, since `Rekening`/
+  `Mutatiesoort` are already guaranteed resolvable by the pre-insert
+  gates).
+- `upload.html` now shows the categorization counts alongside each
+  accepted account's result.
+- Verified end-to-end on a scratch copy of the dev database (never the
+  real one): a Naam-only match, a no-match row, a row matching *only* via
+  Mededeling (proving the "difficult" path works standalone, not just as
+  a tiebreaker), a row matching via both fields on different categories
+  (→ `processed = 2`), a full `process_upload()` run through the real ING
+  NL importer that rejects an entire batch over one unmapped
+  `Mutatiesoort`, and the same batch (minus that row) accepted and
+  categorized in one request.
+
+**Not yet implemented:** the manual review UI for `processed = 0`/`2`
+rows sitting in `temp_afschrift`, migration queries, ledger viewing/
+reporting.

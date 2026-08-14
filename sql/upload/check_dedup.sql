@@ -1,6 +1,6 @@
 -- Finds duplicate rows for an account: any (Datum, Bedrag_eur,
 -- Saldo_na_mutatie, Naam) combination appearing more than once across
--- confirmed history (afschrift), pending enrichment (temp_afschrift), and
+-- confirmed history (afschrift), pending categorization (temp_afschrift), and
 -- the newly-uploaded batch (temp_afschrift2) combined. An empty result
 -- means no duplicates.
 --
@@ -10,7 +10,7 @@
 --
 -- Date formats differ across tables (temp_afschrift2.Datum is the raw
 -- "YYYYMMDD" from the bank file; temp_afschrift/afschrift.Datum is
--- "YYYY-MM-DD" once enrichment has run), so temp_afschrift2's Datum is
+-- "YYYY-MM-DD" once categorization has run), so temp_afschrift2's Datum is
 -- normalized to "YYYY-MM-DD" here before comparing — otherwise the same
 -- calendar date would never match across tables.
 --

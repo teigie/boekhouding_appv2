@@ -1,11 +1,26 @@
 """Raw-upload pipeline: parse a bank file, insert it into temp_afschrift2,
-gate it per account with the balance-chain + dedup checks in sql/upload/,
-and commit/rollback atomically. See docs/ARCHITECTURE.md.
+gate it per account, and commit/rollback atomically. See docs/ARCHITECTURE.md.
 
-The account (Rekening) in the file must already be registered and linked
-to the uploading user (see the Accounts screen) — unlike the categorization
-side of the pipeline, an unknown or not-yours account is rejected here
-outright, not held for later linking.
+Two kinds of gate, both all-or-nothing per account:
+
+- Pre-insert FK checks — Rekening and Mutatiesoort must both already
+  resolve (Rekening to an account registered *and* linked to the uploading
+  user; Mutatiesoort against the structural mutatiesoort_mapping
+  reference data). Nothing is inserted if either fails — these aren't
+  temp_afschrift2 problems, they're "this batch doesn't belong here /
+  isn't recognized yet" problems.
+- Post-insert continuity checks (balance-chain + dedup, sql/upload/) — run
+  after inserting the batch, inside the same transaction; roll back the
+  insert if either fails. These inherently need the new rows already
+  present, since they check the batch against the account's existing
+  history.
+
+Once a batch clears both and commits, that account's full temp_afschrift2
+backlog is immediately categorized (app/categorization.py) so it lands
+fully resolved-or-flagged in temp_afschrift, ready for manual review.
+Categorization can't fail under normal operation here — Mutatiesoort/
+Rekening are already guaranteed to resolve by the pre-insert checks above,
+and every row otherwise gets `processed` 0, 1, or 2.
 
 A single uploaded file can in principle reference more than one account
 (ING NL exports normally cover just one). Each account's batch is its own
@@ -19,6 +34,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Optional
 
+from app.categorization import CategorizationResult, categorize_pending
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.importers.registry import get_importer
@@ -28,6 +44,7 @@ log = get_app_logger()
 audit = get_audit_logger()
 
 _FIND_REKENING_SQL = (SQL_DIR / "queries" / "rekeningen" / "find_by_name.sql").read_text(encoding="utf-8")
+_FIND_MUTATIESOORT_SQL = (SQL_DIR / "queries" / "mutatiesoorten" / "find_by_name.sql").read_text(encoding="utf-8")
 _INSERT_BATCH_SQL = (SQL_DIR / "upload" / "insert_batch.sql").read_text(encoding="utf-8")
 _CHECK_BALANCE_CHAIN_SQL = (SQL_DIR / "upload" / "check_balance_chain.sql").read_text(encoding="utf-8")
 _CHECK_DEDUP_SQL = (SQL_DIR / "upload" / "check_dedup.sql").read_text(encoding="utf-8")
@@ -39,6 +56,7 @@ class AccountUploadResult:
     accepted: bool
     row_count: int
     reason: Optional[str] = None
+    categorization: Optional[CategorizationResult] = None
 
 
 def process_upload(file_bytes: bytes, format_id: str, user_id: int) -> list[AccountUploadResult]:
@@ -85,6 +103,22 @@ def _process_account_batch(
         audit.info("Upload REJECTED for %s: belongs to a different user (%d rows attempted)", rekening_text, row_count)
         return AccountUploadResult(rekening_text, accepted=False, row_count=row_count, reason=reason)
 
+    unmapped_mutatiesoorten = sorted({
+        row["Mutatiesoort"] for row in account_rows
+        if conn.execute(_FIND_MUTATIESOORT_SQL, {"name": row["Mutatiesoort"]}).fetchone() is None
+    })
+    if unmapped_mutatiesoorten:
+        reason = (
+            f"Onbekende mutatiesoort(en): {', '.join(unmapped_mutatiesoorten)}. "
+            "Voeg deze toe aan de mutatiesoort-mapping voordat je dit bestand opnieuw uploadt."
+        )
+        log.warning("Upload rejected for %s: %s", rekening_text, reason)
+        audit.info(
+            "Upload REJECTED for %s: unmapped mutatiesoort(en) %s (%d rows attempted)",
+            rekening_text, unmapped_mutatiesoorten, row_count,
+        )
+        return AccountUploadResult(rekening_text, accepted=False, row_count=row_count, reason=reason)
+
     rekening_id = rekening["ID"]
     params = {"rekening_text": rekening_text, "rekening_id": rekening_id}
 
@@ -125,7 +159,11 @@ def _process_account_batch(
         conn.commit()
         log.info("Upload accepted for %s: %d rows", rekening_text, row_count)
         audit.info("Upload ACCEPTED for %s: %d rows inserted into temp_afschrift2", rekening_text, row_count)
-        return AccountUploadResult(rekening_text, accepted=True, row_count=row_count)
+
+        categorization_result = categorize_pending(rekening_text)
+        return AccountUploadResult(
+            rekening_text, accepted=True, row_count=row_count, categorization=categorization_result
+        )
 
     except Exception:
         conn.rollback()

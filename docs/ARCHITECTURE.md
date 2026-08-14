@@ -60,7 +60,7 @@ geüpload bestand
      v
 temp_afschrift2   <- ruwe rijen, exact zoals de bank ze exporteerde
      |             (Rekening/Mutatiesoort nog platte tekst, nog geen FK's)
-     | verrijking (SQL)
+     | categorisering (SQL)
      v
 temp_afschrift    <- FK's opgelost + een `processed`-status per rij
      |
@@ -77,16 +77,28 @@ uit `app/importers/` — één per bank/exportformaat, gekozen door de
 gebruiker op `/upload`) en voegt het rij voor rij, onveranderd, toe in
 exact de volgorde waarin het in het bestand staat. `Rekening` en
 `Mutatiesoort` blijven platte tekst — er gebeurt nog geen FK-resolutie,
-dat is de taak van verrijking (fase 2).
+dat is de taak van categorisering (fase 2).
 
-**De rekening moet al geregistreerd en gekoppeld zijn aan de uploadende
-gebruiker.** In tegenstelling tot categorisering (fase 2) wordt een
-onbekende of niet-jouw-rekening hier direct afgewezen, niet vastgehouden
-om later te koppelen — de gebruiker koppelt een rekening op `/accounts`
-*voordat* hij een afschrift daarvoor uploadt
-(`sql/queries/rekeningen/find_by_name.sql` herleidt de `Rekening`-tekst
-uit het bestand naar een `Rekening.ID` + bijbehorende `user_ID`; komt één
-van beide niet overeen → afgewezen, niets wordt ingevoegd).
+**Twee foreign keys worden vóór het invoegen gecontroleerd, niet erna.**
+Beide zijn "hoort dit bestand hier wel thuis"-controles, geen
+saldo-/dedup-continuïteitsproblemen, dus ze draaien vóórdat er ook maar
+één rij wordt ingevoegd — faalt een van beide, dan wordt niets ingevoegd:
+
+- **Rekening** moet al geregistreerd en gekoppeld zijn aan de uploadende
+  gebruiker. In tegenstelling tot de categorie-match in categorisering
+  (fase 2) wordt een onbekende of niet-jouw-rekening hier direct
+  afgewezen, niet vastgehouden om later te koppelen — de gebruiker koppelt
+  een rekening op `/accounts` *voordat* hij een afschrift daarvoor uploadt
+  (`sql/queries/rekeningen/find_by_name.sql` herleidt de `Rekening`-tekst
+  uit het bestand naar een `Rekening.ID` + bijbehorende `user_ID`; komt één
+  van beide niet overeen → afgewezen).
+- **Mutatiesoort** moet voor elke rij in het bestand al voorkomen in
+  `mutatiesoort_mapping` (`sql/queries/mutatiesoorten/find_by_name.sql`).
+  Dit is structurele referentiedata (zie `sql/seed_data.sql`) — een
+  onbekende mutatiesoort betekent dat de mapping-tabel niet compleet is,
+  niet dat deze rij handmatige controle nodig heeft, dus het hele bestand
+  wordt afgewezen in plaats van dat de rij als `processed = 0` in
+  categorisering terechtkomt.
 
 **Rijvolgorde is dragend, niet cosmetisch.** `Saldo_na_mutatie` is een
 lopend saldo, dus de positie van een rij in de reeks maakt deel uit van
@@ -101,7 +113,7 @@ batches in diezelfde tabel te ordenen. Omdat rijen altijd strikt stromen
 via `afschrift ← temp_afschrift ← temp_afschrift2`, herstelt "tabel, dan
 die tabel's eigen ID" een geldige globale volgorde zonder dat de drie
 ID-kolommen onderling iets met elkaar te maken hoeven hebben. Dit steunt
-op het feit dat verrijking altijd de *volledige* huidige achterstand van
+op het feit dat categorisering altijd de *volledige* huidige achterstand van
 `temp_afschrift2` voor een rekening in één atomaire run leegmaakt, nooit
 een deel ervan — zie `sql/upload/check_balance_chain.sql`.
 
@@ -118,11 +130,15 @@ gecontroleerd. Rekening A's volgorde moet intact blijven; wat er
 tussendoor met rekening B gebeurt (mag, zolang B's eigen keten maar
 klopt) doet er niet toe.
 
-**Per rekening lopen twee controles, ná het invoegen van de nieuwe batch
-maar binnen dezelfde transactie** (`sql/upload/`, uitgevoerd door
-`app/upload.py`) — beide slagen en de transactie wordt gecommit, of één
-van beide faalt en de hele batch wordt teruggedraaid (alles-of-niets,
-hetzelfde principe als migratie, alleen één fase eerder toegepast):
+**Per rekening lopen daarna nog twee continuïteitscontroles, ná het
+invoegen van de nieuwe batch maar binnen dezelfde transactie**
+(`sql/upload/`, uitgevoerd door `app/upload.py`) — beide slagen en de
+transactie wordt gecommit, of één van beide faalt en de hele batch wordt
+teruggedraaid (alles-of-niets, hetzelfde principe als migratie, alleen één
+fase eerder toegepast). Dit zijn wél post-insert controles, in
+tegenstelling tot de twee hierboven — ze hebben de net ingevoegde rijen
+nodig om tegen de bestaande geschiedenis van de rekening te kunnen
+vergelijken:
 
 - **`check_balance_chain.sql`** — doorloopt de volledige reeks van de
   rekening (bevestigd `afschrift` + wachtend `temp_afschrift` + de nieuwe
@@ -147,6 +163,16 @@ Eén geüpload bestand kan in principe naar meer dan één rekening
 verwijzen; de batch van elke rekening is zijn eigen onafhankelijke
 transactie.
 
+**Zodra een batch gecommit is, wordt de rekening's volledige
+`temp_afschrift2`-achterstand meteen gecategoriseerd** (`app/upload.py`
+roept `app/categorization.py` aan) — dat is fase 2, hieronder. Dit gebeurt
+als een eigen atomaire stap op een eigen connectie: gaat dit onverwacht
+mis, dan blijven de al gecommitte rijen gewoon in `temp_afschrift2` staan
+voor een volgende poging, de upload zelf is niet aangetast. In de praktijk
+zou categorisering hier niet moeten falen — `Rekening`/`Mutatiesoort` zijn
+al gegarandeerd herleidbaar door de twee pre-insert-controles hierboven,
+en elke rij krijgt hoe dan ook gewoon `processed` 0, 1 of 2.
+
 ### Datums
 
 Drie verschillende datumnotaties, met opzet:
@@ -160,29 +186,44 @@ Drie verschillende datumnotaties, met opzet:
 `DD-MM-YYYY` is niet lexicografisch sorteerbaar ("15-03-2026" komt als
 platte tekst vóór "20-01-2026", ook al komt maart na januari), dus het is
 puur een presentatieformaat, toegepast bij het renderen van een template
-— nooit opgeslagen. Verrijking (fase 2) zet de ruwe `YYYYMMDD` om naar
+— nooit opgeslagen. Categorisering (fase 2) zet de ruwe `YYYYMMDD` om naar
 ISO bij het kopiëren van een rij van `temp_afschrift2` naar
 `temp_afschrift`.
 
-### Fase 2 — verrijking (`temp_afschrift2` → `temp_afschrift`)
+### Fase 2 — categorisering (`temp_afschrift2` → `temp_afschrift`)
 
-SQL herleidt de foreign keys van elke rij en kent een `processed`-status
-toe:
+SQL herleidt de foreign keys van elke rij:
 
-- `Rekening` (tekst) → `Rekening.name` → `Rekening_ID`
-- `Mutatiesoort` (tekst) → `mutatiesoort_mapping.Name` → `mutatiesoort_ID`
-- `Naam`/`Mededeling` doorzocht op elke `afschrift_cat_keywords.keyword`-
-  substring → `Afschrift_cat_ID`
+- `Rekening` (tekst) → `Rekening.name` → `Rekening_ID` — al gevalideerd bij
+  upload (fase 1: de rekening moet geregistreerd en aan de gebruiker
+  gekoppeld zijn), dus hier altijd herleidbaar.
+- `Mutatiesoort` (tekst) → `mutatiesoort_mapping.Name` → `mutatiesoort_ID` —
+  structurele referentiedata; wordt verondersteld altijd te matchen.
 
-`processed`-waarden:
+Beide gebeuren onafhankelijk van `processed` — dat gaat uitsluitend over de
+categorie-match, in twee stappen:
+
+- **Simpele categorisering** — `Naam` (de tegenpartij-/bedrijfsnaam)
+  doorzocht op elke `afschrift_cat_keywords.keyword`-substring (bijv.
+  "Lidl" → Levensmiddelen).
+- **Moeilijke categorisering** — `Mededeling` (de vrije-tekst
+  transactieomschrijving) doorzocht op elke
+  `afschrift_cat_mededeling_keywords.keyword`-substring/frase, voor
+  gevallen waar `Naam` alleen niet genoeg zegt.
+
+Huidige strategie (nog niet definitief, kan nog wijzigen): beide velden
+worden voor elke rij altijd doorzocht, en de gematchte categorieën uit
+beide bronnen worden samengevoegd tot één verzameling per rij:
 
 | Waarde | Betekenis |
 |---|---|
-| `0` | Onopgelost — er ontbreekt iets (rekening, mutatiesoort, of geen enkel keyword kwam overeen). Vereist handmatige invoer. |
-| `1` | Netjes opgelost — precies één categorie-match (of geen nodig) en alle FK's bekend. Klaar voor migratie. |
-| `2` | Ambigu — meer dan één categorie-keyword kwam overeen. Vereist een handmatige keuze daartussen, anders dan "niets kwam overeen". |
+| `0` | Geen enkele categorie-keyword kwam overeen (Naam noch Mededeling). Vereist handmatige categorie-keuze. |
+| `1` | Precies één categorie kwam overeen. Klaar voor migratie. |
+| `2` | Ambigu — meer dan één categorie kwam overeen. Vereist een handmatige keuze daartussen. |
 
-*(Nog niet geïmplementeerd — zie `sql/enrichment/README.md`.)*
+Draait automatisch, meteen na een geaccepteerde upload (zie fase 1) — er
+is geen aparte trigger of UI-stap voor. Zie `sql/categorization/README.md`
+voor de SQL-bestanden en `app/categorization.py` voor de orchestratie.
 
 ### Fase 3 — handmatige controle
 
@@ -222,7 +263,7 @@ gitignored:
   exceptions. Wordt tijdens development ook naar de console geschreven.
 - **`logs/audit.log`** — een blijvend overzicht van datawijzigende
   events (ontvangen uploads, rijen afgewezen door dedup/continuïteit,
-  verrijkingsresultaten, uitgevoerde migraties — welke rijen, welke
+  categoriseringsresultaten, uitgevoerde migraties — welke rijen, welke
   rekening, wanneer). Bewust gescheiden van `app.log`: dit is bedoeld om
   te antwoorden op "wat is er met mijn data gebeurd en wanneer", niet om
   de server te debuggen.

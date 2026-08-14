@@ -17,6 +17,12 @@
             <strong>{{ r.rekening }}</strong> —
             {% if r.accepted %}
               geaccepteerd, {{ r.row_count }} rij(en) toegevoegd.
+              {% if r.categorization %}
+                Gecategoriseerd: {{ r.categorization.resolved }} opgelost,
+                {{ r.categorization.unresolved }} onopgelost,
+                {{ r.categorization.ambiguous }} ambigu
+                — klaar voor handmatige controle.
+              {% endif %}
             {% else %}
               afgewezen: {{ r.reason }}
             {% endif %}

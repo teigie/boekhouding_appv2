@@ -1,5 +1,5 @@
 -- Verifies an account's full sequence — confirmed ledger + pending
--- enrichment + newly-uploaded rows — has no broken balance link anywhere.
+-- categorization + newly-uploaded rows — has no broken balance link anywhere.
 -- Returns the offending rows; an empty result means the chain is intact
 -- and the just-inserted batch is safe to commit.
 --
@@ -12,7 +12,7 @@
 -- *within* that table — to order rows inside one batch, and to order
 -- multiple batches that have piled up in the same table. Because rows
 -- always flow strictly afschrift <- temp_afschrift <- temp_afschrift2
--- (enrichment drains temp_afschrift2 into temp_afschrift; migration
+-- (categorization drains temp_afschrift2 into temp_afschrift; migration
 -- drains temp_afschrift into afschrift), "table, then that table's own
 -- ID" reconstructs the correct global order — the three ID columns don't
 -- need to relate to each other directly. See docs/ARCHITECTURE.md.

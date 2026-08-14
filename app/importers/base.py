@@ -30,7 +30,7 @@ class BaseImporter(ABC):
         Datum stays as the source's raw 8-character "YYYYMMDD" string —
         that's what temp_afschrift2.Datum (varchar(8)) expects. The
         human-readable "YYYY-MM-DD" form belongs to temp_afschrift/
-        afschrift (char(10)) and is produced later, during enrichment —
+        afschrift (char(10)) and is produced later, during categorization —
         don't reformat it here. Bedrag_eur and Saldo_na_mutatie should be
         Python floats (or Decimal), regardless of the source file's own
         formatting (e.g. European "1.234,56" style).

@@ -2,7 +2,7 @@
 --
 -- This is one person's example of afschrift_cat_keywords: substrings of a
 -- transaction's Naam/Mededeling that auto-assign a category during
--- enrichment (e.g. "Esso" -> Auto). These are inherently personal — your
+-- categorization (e.g. "Esso" -> Auto). These are inherently personal — your
 -- supermarket, gym, or streaming services won't match someone else's list.
 --
 -- Kept here as a reference/starting point for a new installation. Load it

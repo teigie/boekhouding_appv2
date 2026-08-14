@@ -45,6 +45,8 @@ create table mutatiesoort_mapping (
 	foreign key (mutatiesoort_ID) references mutatiesoort(ID)
 );
 
+-- "Simple" categorization: substrings of Naam (the counterparty/merchant
+-- name) that auto-assign a category, e.g. "Lidl" -> Levensmiddelen.
 create table afschrift_cat_keywords (
 	ID integer primary key autoincrement,
 	keyword varchar(30) not null unique,
@@ -52,8 +54,19 @@ create table afschrift_cat_keywords (
 	foreign key (cat_ID) references afschrift_categorien(ID)
 );
 
+-- "Difficult" categorization: substrings of Mededeling (the free-text
+-- transaction description), checked in addition to afschrift_cat_keywords
+-- when Naam alone isn't conclusive. Wider than a merchant name, so this
+-- allows longer phrases/sentences, not just single words.
+create table afschrift_cat_mededeling_keywords (
+	ID integer primary key autoincrement,
+	keyword varchar(200) not null unique,
+	cat_ID integer,
+	foreign key (cat_ID) references afschrift_categorien(ID)
+);
+
 -- ---------------------------------------------------------------------------
--- Pipeline: raw upload -> enrichment -> review -> permanent ledger
+-- Pipeline: raw upload -> categorization -> review -> permanent ledger
 -- ---------------------------------------------------------------------------
 
 -- Stage 1: raw bank statement rows, exactly as uploaded (no FK resolution).
@@ -74,10 +87,14 @@ create table temp_afschrift2 (
 	Tag Varchar(200)
 );
 
--- Stage 2: enrichment output. Same shape as afschrift, plus `processed`:
---   0 = unresolved (missing account/mutatiesoort/category link)
---   1 = cleanly resolved, eligible for migration
---   2 = ambiguous (more than one category keyword matched)
+-- Stage 2: categorization output. Same shape as afschrift, plus `processed`.
+-- Rekening_ID/Mutatiesoort_ID are resolved independently of `processed` —
+-- they're always expected to map (see docs/ARCHITECTURE.md). `processed`
+-- reflects only the category-keyword match outcome (Naam + Mededeling
+-- combined, see sql/categorization/):
+--   0 = no category keyword matched — needs a manual category
+--   1 = exactly one category matched, eligible for migration
+--   2 = ambiguous — more than one category matched, needs a manual pick
 create table temp_afschrift (
 	ID integer primary key autoincrement,
 	Datum char(10) not null,

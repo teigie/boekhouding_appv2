@@ -1,4 +1,4 @@
--- Remove a keyword -> category link. Only affects future enrichment runs —
+-- Remove a keyword -> category link. Only affects future categorization runs —
 -- rows already categorized in temp_afschrift/afschrift keep their
 -- Afschrift_cat_ID and are not touched.
 -- Params: :keyword

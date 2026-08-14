@@ -11,13 +11,14 @@ tijd.
 
 Huidige status: inloggen/aanmelden (geen wachtwoorden — je kiest gewoon
 wie je bent), rekeningen koppelen, en het uploaden van een ING NL-
-bankafschrift (met per-rekening saldoketen- en dubbele-rij-controles,
-alles-of-niets) werken allemaal end-to-end. Verrijking/categorisering,
-handmatige controle, migratie naar het permanente grootboek, en
-bekijken/rapporteren zijn nog niet gebouwd. Zie
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) voor het volledige ontwerp
-en [CHANGELOG.md](CHANGELOG.md) voor wat er tot nu toe daadwerkelijk
-gebouwd is.
+bankafschrift werken end-to-end, inclusief automatische categorisering
+erna (per-rekening saldoketen-, dubbele-rij- en mutatiesoort-controles,
+alles-of-niets, gevolgd door automatische categorie-toewijzing zodra een
+batch geaccepteerd is). Handmatige controle van onopgeloste/ambigue rijen,
+migratie naar het permanente grootboek, en bekijken/rapporteren zijn nog
+niet gebouwd. Zie [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) voor het
+volledige ontwerp en [CHANGELOG.md](CHANGELOG.md) voor wat er tot nu toe
+daadwerkelijk gebouwd is.
 
 ## Installatie (elke machine)
 
@@ -52,7 +53,8 @@ app/                    FastAPI-applicatie
   session.py             Login/sessie-helpers (geen wachtwoorden — zie ARCHITECTURE.md)
   templating.py          Gedeelde Jinja2Templates-instantie
   logging_config.py      Logging-opzet (technische log + audit-log van datawijzigingen)
-  upload.py              Uploadpijplijn: parsen -> invoegen -> controles -> commit/rollback
+  upload.py              Uploadpijplijn: parsen -> invoegen -> controles -> commit/rollback -> categorisering
+  categorization.py      Categoriseert een rekening's temp_afschrift2-achterstand naar temp_afschrift
   main.py                Startpunt van de app: middleware, routers
   importers/             Één BaseImporter-subklasse per bank/exportformaat
     base.py               Gedeelde interface
@@ -70,12 +72,13 @@ sql/                    Elke SQL-instructie die de app uitvoert, als bijgehouden
   schema.sql              CREATE TABLE-instructies
   seed_data.sql           Verplichte referentiedata (categorieën, mutatiesoorten)
   optional/               Optionele/voorbeelddata (bijv. de categorie-keywords van één persoon)
-  upload/                 Controleert een ruwe upload per rekening (saldoketen + dedup)
-  enrichment/             Ruwe upload -> opgeloste, gecategoriseerde rijen (nog niet gebouwd)
+  upload/                 Post-insert continuïteitscontroles per rekening (saldoketen + dedup)
+  categorization/         Ruwe upload -> opgeloste, gecategoriseerde rijen
   migration/              Opgeloste rijen -> permanent grootboek (nog niet gebouwd)
   queries/                App-gerichte selects + herbruikbare schrijf-templates
     users/                  login/aanmeld-queries
     rekeningen/              rekening-queries
+    mutatiesoorten/          mutatiesoort-queries (pre-insert upload-gate + categorisering)
     categorieen/             categorie-queries
     reference_data/          categorieën & keywords toevoegen/verwijderen na installatie
 
