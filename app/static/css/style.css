@@ -54,6 +54,10 @@ body {
   padding: 2rem 1.5rem;
 }
 
+.content--wide {
+  max-width: 1440px;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -89,8 +93,95 @@ code {
   font-weight: 500;
 }
 
-.result-ok { color: #2a9d5c; }
-.result-fail { color: #d64545; }
+.result-ok { color: #2a9d5c; font-weight: 500; }
+.result-fail { color: #d64545; font-weight: 500; }
+.result-ambiguous { color: #c98a1f; font-weight: 500; }
+
+.review-group {
+  margin-top: 1.25rem;
+}
+
+.review-group h2 {
+  margin-top: 0;
+  margin-bottom: 0.15rem;
+  font-size: 1.05rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+td.col-wrap {
+  white-space: normal;
+  min-width: 160px;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+  background: var(--bg);
+}
+
+tbody tr:nth-child(even) {
+  background: var(--bg);
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.col-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount-af { color: #d64545; }
+.amount-bij { color: #2a9d5c; }
+
+.category-cell {
+  white-space: nowrap;
+}
+
+.category-cell select,
+.category-cell input {
+  display: inline-block;
+  width: auto;
+  margin-top: 0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+
+.category-select {
+  min-width: 9rem;
+}
+
+.category-new {
+  min-width: 9rem;
+  margin-left: 0.4rem;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
 
 form label {
   display: block;

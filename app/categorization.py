@@ -5,9 +5,11 @@ and a `processed` status. See docs/ARCHITECTURE.md.
 Rekening_ID/Mutatiesoort_ID resolution is independent of `processed` —
 both are expected to always resolve (the account was already validated at
 upload time; mutatiesoort_mapping is structural reference data).
-`processed` reflects only the combined category-keyword match outcome
-(Naam + Mededeling) — see sql/categorization/README.md for the current
-(provisional) combination strategy.
+`processed` reflects only the combined category-match outcome, from three
+signals: Naam keywords, Mededeling keywords, and Tegenrekening resolving
+to another account of the same user ("Interne overboeking") — see
+sql/categorization/README.md for the current (provisional) combination
+strategy.
 
 Must always run against an account's FULL current temp_afschrift2 backlog
 in one atomic transaction, never a partial subset — see
@@ -61,7 +63,11 @@ def _categorize_account(conn: sqlite3.Connection, rekening_text: str) -> Optiona
         log.error("Categorization skipped for %s: account not found", rekening_text)
         return None
 
-    params = {"rekening_text": rekening_text, "rekening_id": rekening["ID"]}
+    params = {
+        "rekening_text": rekening_text,
+        "rekening_id": rekening["ID"],
+        "user_id": rekening["user_ID"],
+    }
 
     try:
         returned = conn.execute(_CATEGORIZE_BATCH_SQL, params).fetchall()

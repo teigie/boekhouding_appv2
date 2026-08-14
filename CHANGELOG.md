@@ -214,3 +214,160 @@ UI, ledger viewing/reporting.
 **Not yet implemented:** the manual review UI for `processed = 0`/`2`
 rows sitting in `temp_afschrift`, migration queries, ledger viewing/
 reporting.
+
+### 2026-08-14 — Read-only `/review` overview
+
+- Added `/review` (`app/routes/review.py`, `review.html`): lists every
+  `temp_afschrift` row still pending (`processed` 0 or 2) across the
+  logged-in user's own accounts, grouped per account with
+  unresolved/ambiguous counts. Deliberately read-only for now — no way to
+  actually resolve a row from this screen yet, that's a separate, later
+  feature (assigning a category, correcting an account, picking between
+  ambiguous matches).
+- Added `sql/queries/temp_afschrift/list_pending_for_user.sql` — joins
+  `Rekening` (to scope to the user) and `mutatiesoort` (the canonical
+  vocabulary table, not `mutatiesoort_mapping`, for a clean display name).
+- Added a `/review` nav link, and minimal `table`/`.table-scroll` CSS
+  (none existed yet) plus a `.result-ambiguous` status color alongside the
+  existing ok/fail ones.
+- Verified the query and template render correctly against a scratch
+  database seeded through the real upload+categorization pipeline (one
+  account with an unresolved row, another with an ambiguous one) — the
+  resolved row was correctly excluded from the listing.
+
+### 2026-08-14 — Third categorization signal: internal transfers
+
+- Added a third, structurally different categorization signal alongside
+  Naam/Mededeling keywords: a row whose `Tegenrekening` resolves to
+  another `Rekening` linked to the *same* user is categorized as "Interne
+  overboeking" — not a keyword match at all, a `Rekening`-to-`Rekening`
+  lookup. Added `sql/categorization/match_internal_transfer.sql`
+  (standalone) and folded the same join into `categorize_batch.sql`'s
+  `combined_matches`, so it participates in the existing
+  0/1/2 (`processed`) combination logic exactly like the other two
+  signals — including going ambiguous if a transfer *also* happens to hit
+  a Naam/Mededeling keyword for a different category.
+  `app/categorization.py` now passes the account's `user_id` through as a
+  query param (already had it from the existing Rekening lookup, just
+  wasn't threaded through before).
+- Verified end-to-end on a scratch copy: a transfer between two of the
+  same user's own accounts → resolved to "Interne overboeking"
+  (`processed = 1`); a transfer to an unregistered/external account → no
+  match, stays unresolved; a transfer to a linked account whose Naam also
+  happens to hit an unrelated keyword → correctly ambiguous
+  (`processed = 2`).
+
+### 2026-08-14 — Hand-driven test data for the upload pipeline
+
+- Added `testdata/` (tracked, not gitignored — reference fixtures like
+  `sql/optional/example_keywords.sql`): `testdata/README.md` walks through
+  the whole pipeline by hand via the real running app (setup steps, an
+  upload order, and an exact expected result per file), and
+  `testdata/upload/*.csv` are the five ING-NL-format fixtures it
+  references — one clean batch exercising all three categorization
+  signals plus both unresolved and ambiguous outcomes, and one per
+  rejection reason (unregistered account, unmapped mutatiesoort, wrong
+  user, broken balance chain).
+- Every expected result in `testdata/README.md` was cross-checked by
+  actually running `process_upload()` against a scratch copy of the dev
+  database with the documented setup steps applied — not guessed.
+- Added `"vakantiegeld" -> Vakantie` to the real dev database's
+  `afschrift_cat_mededeling_keywords` (that table started out empty), so
+  batch 1 can demonstrate the Mededeling-only categorization path for
+  real, not just on a scratch copy.
+
+### 2026-08-14 — Two more isolated test batches; `/review` shows everything
+
+- Added `testdata/upload/06_batch_ambiguous.csv` (single row, Naam and
+  Mededeling each hit a different category → `processed = 2`, no
+  dependency on the second linked account) and
+  `07_batch_interne_overboeking.csv` (single row, Tegenrekening-only match
+  → `processed = 1`, Interne overboeking, no Naam/Mededeling keyword
+  involved) — isolated, one-signal-at-a-time versions of what batch 1
+  already covered combined. Both verified against a scratch copy
+  continuing the real dev database's actual balance chain.
+  `testdata/README.md` also now explains what happens to batch 1's rows
+  2/6 if the second account isn't linked yet at upload time (they don't
+  error, they just lose the internal-transfer signal and categorize
+  differently) — this is what actually happened when this was tested by
+  hand, which is what prompted adding 06/07 as an account-independent way
+  to see both cases regardless.
+- Reworked `/review` from "pending rows only, grouped per account" to a
+  single flat table of **every** `temp_afschrift` row (any `processed`
+  value) across the user's accounts, with `Rekening` and `Categorie` shown
+  by name (not ID) as explicit columns, plus an overall
+  opgelost/onopgelost/ambigu count line. Renamed the backing query
+  `sql/queries/temp_afschrift/list_pending_for_user.sql` ->
+  `list_all_for_user.sql` (dropped the `processed` filter, added a
+  `LEFT JOIN afschrift_categorien` for the category name) since it's no
+  longer just the pending subset.
+
+### 2026-08-14 — `/review`: per-account tables, editable category
+
+- `/review` now groups rows into one table per Rekening (ordered by
+  account name, matching the backing query's existing sort) instead of a
+  single flat table across every account — each group has its own
+  opgelost/onopgelost/ambigu subtotal, plus the overall total still shown
+  above all of them. The `Rekening` column itself is gone since the group
+  heading now carries that.
+- Categorie went from a display-only column to a per-row form: a dropdown
+  of every existing category, plus a "+ nieuwe categorie…" option that
+  reveals a text input. Submitting either path
+  (`POST /review/{id}/category`, new `sql/queries/temp_afschrift/
+  set_category.sql`) sets `Afschrift_cat_ID` and always marks the row
+  `processed = 1` — picking a category is itself the resolution, whether
+  the row was unresolved, ambiguous, or already resolved differently
+  before. A typed name that already exists (case-insensitively) is reused
+  rather than creating a near-duplicate category (new
+  `sql/queries/categorieen/find_by_name.sql`); a genuinely new name goes
+  through the existing `reference_data/add_category.sql` template. The
+  update is scoped to the logged-in user by a Rekening-ownership check
+  baked into the `UPDATE`'s `WHERE` clause, not a separate lookup —
+  verified that a crafted row ID belonging to another user's account is
+  silently rejected (`rowcount == 0`, no change, warning logged).
+- Table CSS reworked for readability: full cell borders instead of just a
+  bottom rule, alternating row shading, a hover highlight, and amounts
+  right-aligned with tabular figures and colored by Af/Bij so a
+  statement's amount reads as one glanceable unit on one line instead of
+  free-floating text.
+- Verified end-to-end against a scratch copy of the dev database: both
+  category-setting paths, the dedup-on-reuse behavior, and the ownership
+  check, all called directly through `app/routes/review.py` (no browser
+  needed — `httpx`/`TestClient` aren't installed in this environment).
+
+### 2026-08-14 — `/review`: save per table, "ready for migration" check, wider page
+
+- Replaced the per-row save button with one save button per Rekening
+  table: `POST /review/{id}/category` is gone, replaced by
+  `POST /review/{rekening_id}/save`, which reads every `cat_id_<row>` /
+  `new_category_name_<row>` field submitted by that table's single
+  `<form>` (wrapping the whole table, not just one row) and resolves each
+  the same way as before (reuse-by-name, create-if-new, always
+  `processed = 1`). The account in the URL is checked against the logged
+  -in user (new `sql/queries/rekeningen/find_by_id_for_user.sql`) before
+  anything is touched; each row update is still additionally scoped by
+  `set_category.sql`'s own ownership check.
+- After saving, the same "is every row for this account now
+  `processed = 1`?" check the future migration step will need runs
+  immediately, and the page says so under that table — "klaar voor
+  migratie naar afschrift (nog niet geïmplementeerd)" if true, "nog niet
+  alle rijen zijn opgelost" otherwise. **Nothing is migrated into
+  `afschrift` yet** — that's still Fase 4, deliberately not built here,
+  this only surfaces whether an account *would* qualify.
+- `list_all_for_user.sql` now also selects `Rekening.ID` (not just the
+  name) so the per-table form's action URL and the post-save readiness
+  check have something to key off of.
+- Added a `content_class` block to `base.html` so an individual page can
+  widen its own `<main>` without affecting the others; `/review` uses it
+  (`content--wide`, 1440px vs. the default 960px) — combined with the
+  category cell shrinking back down to just a dropdown (no more per-row
+  button crowding it), this is enough that the table no longer needs its
+  horizontal scrollbar on a normal screen.
+- Verified against a scratch copy of the actual dev database (which by
+  now has two real accounts with a mix of resolved/unresolved/ambiguous
+  rows from hand-testing): both grouped tables render with working
+  per-table forms, a bulk save resolves multiple rows (including a
+  brand-new category) in one submit, the affected table's readiness note
+  flips to "klaar voor migratie" while the other account's doesn't, and a
+  crafted `rekening_id` that isn't the current user's is rejected before
+  any row is touched.

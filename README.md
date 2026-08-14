@@ -14,11 +14,17 @@ wie je bent), rekeningen koppelen, en het uploaden van een ING NL-
 bankafschrift werken end-to-end, inclusief automatische categorisering
 erna (per-rekening saldoketen-, dubbele-rij- en mutatiesoort-controles,
 alles-of-niets, gevolgd door automatische categorie-toewijzing zodra een
-batch geaccepteerd is). Handmatige controle van onopgeloste/ambigue rijen,
+batch geaccepteerd is). Op `/review` staat, per rekening in een eigen
+tabel, elke `temp_afschrift`-rij (opgelost én niet) met een dropdown om
+de categorie te corrigeren of een nieuwe toe te voegen — één opslaan-knop
+per tabel verwerkt alle rijen van die rekening ineens, en checkt meteen
+of de rekening klaar is voor migratie (zonder daadwerkelijk te
+migreren). Een rekening corrigeren, kiezen tussen ambigue matches,
 migratie naar het permanente grootboek, en bekijken/rapporteren zijn nog
-niet gebouwd. Zie [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) voor het
-volledige ontwerp en [CHANGELOG.md](CHANGELOG.md) voor wat er tot nu toe
-daadwerkelijk gebouwd is.
+niet gebouwd. Zie
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) voor het volledige ontwerp en
+[CHANGELOG.md](CHANGELOG.md) voor wat er tot nu toe daadwerkelijk gebouwd
+is.
 
 ## Installatie (elke machine)
 
@@ -65,6 +71,7 @@ app/                    FastAPI-applicatie
     accounts.py            /accounts (bekijken + een Rekening koppelen)
     dashboard.py            /
     upload.py               /upload
+    review.py                /review (overzicht per rekening + categorie corrigeren/toevoegen)
   templates/              Jinja2 HTML-templates
   static/                 CSS/JS, ongewijzigd geserveerd
 
@@ -80,13 +87,22 @@ sql/                    Elke SQL-instructie die de app uitvoert, als bijgehouden
     rekeningen/              rekening-queries
     mutatiesoorten/          mutatiesoort-queries (pre-insert upload-gate + categorisering)
     categorieen/             categorie-queries
+    temp_afschrift/          /review: alle-rijen-query + categorie zetten/corrigeren
     reference_data/          categorieën & keywords toevoegen/verwijderen na installatie
 
 data/                   Gegenereerde SQLite-database + sessiegeheim (gitignored)
 logs/                   Gegenereerde runtime-logs (gitignored)
 docs/                   Architectuur-/ontwerpdocumentatie
+testdata/               Hand-doorlopen testscenario's voor de upload-/categoriseringspijplijn
 run.py                   Start de lokale server
 ```
+
+## Testen
+
+`testdata/README.md` bevat een stap-voor-stap doorloop van de hele
+pijplijn (upload -> beide soorten controles -> categorisering ->
+`/review`) met kant-en-klare CSV-bestanden in `testdata/upload/`, elk met
+een vooraf geverifieerd verwacht resultaat.
 
 ## Logs
 

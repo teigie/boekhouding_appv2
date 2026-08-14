@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Controle{% endblock %}
+{% block content_class %}content--wide{% endblock %}
+{% block content %}
+  <h1>Handmatige controle</h1>
+  <p class="muted">
+    Alle rijen die klaarstaan in <code>temp_afschrift</code>, per rekening
+    in een eigen tabel — opgelost én nog niet. Kies per rij een categorie
+    en sla de hele tabel in één keer op. Rekening corrigeren, kiezen
+    tussen ambigue matches en migreren naar <code>afschrift</code> komen
+    in latere stappen.
+  </p>
+
+  {% if not groups %}
+    <section class="card">
+      <p class="muted">Nog geen rijen — upload eerst een bankafschrift.</p>
+    </section>
+  {% else %}
+    <p class="muted">
+      {{ counts.resolved + counts.unresolved + counts.ambiguous }} rijen totaal —
+      {{ counts.resolved }} opgelost,
+      {{ counts.unresolved }} onopgelost,
+      {{ counts.ambiguous }} ambigu.
+    </p>
+
+    {% for group in groups %}
+      <section class="card review-group" id="rekening-{{ group.rekening_id }}">
+        <h2>{{ group.rekening }}</h2>
+        <p class="muted">
+          {{ group.rows | length }} rijen —
+          {{ group.counts.resolved }} opgelost,
+          {{ group.counts.unresolved }} onopgelost,
+          {{ group.counts.ambiguous }} ambigu.
+        </p>
+
+        <form method="post" action="/review/{{ group.rekening_id }}/save">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Naam</th>
+                  <th>Mededeling</th>
+                  <th class="col-amount">Bedrag</th>
+                  <th>Mutatiesoort</th>
+                  <th>Categorie</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in group.rows %}
+                  <tr>
+                    <td>{{ row["Datum"] | eu_date }}</td>
+                    <td>{{ row["Naam"] }}</td>
+                    <td class="col-wrap">{{ row["Mededeling"] or "" }}</td>
+                    <td class="col-amount {{ 'amount-af' if row['Af_bij'] == 'Af' else 'amount-bij' }}">
+                      {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(row["Bedrag_eur"]) }}
+                    </td>
+                    <td>{{ row["Mutatiesoort"] }}</td>
+                    <td class="category-cell">
+                      <select
+                        name="cat_id_{{ row['ID'] }}"
+                        class="category-select"
+                        onchange="this.closest('td').querySelector('.category-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+                      >
+                        <option value="" disabled {{ "selected" if not row["Categorie"] }}>— kies —</option>
+                        {% for cat in categories %}
+                          <option value="{{ cat['ID'] }}" {{ "selected" if cat["Name"] == row["Categorie"] }}>{{ cat["Name"] }}</option>
+                        {% endfor %}
+                        <option value="__new__">+ nieuwe categorie…</option>
+                      </select>
+                      <input
+                        type="text"
+                        name="new_category_name_{{ row['ID'] }}"
+                        placeholder="Naam nieuwe categorie"
+                        class="category-new"
+                        style="display: none;"
+                      >
+                    </td>
+                    <td class="{{ {0: 'result-fail', 1: 'result-ok', 2: 'result-ambiguous'}[row['processed']] }}">
+                      {{ {0: "Onopgelost", 1: "Opgelost", 2: "Ambigu"}[row["processed"]] }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-actions">
+            <button type="submit">Tabel opslaan</button>
+            {% if group.all_resolved %}
+              <span class="result-ok">✓ Alle rijen opgelost — klaar voor migratie naar afschrift (nog niet geïmplementeerd).</span>
+            {% else %}
+              <span class="muted">Nog niet alle rijen zijn opgelost.</span>
+            {% endif %}
+          </div>
+        </form>
+      </section>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

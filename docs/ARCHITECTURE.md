@@ -201,7 +201,7 @@ SQL herleidt de foreign keys van elke rij:
   structurele referentiedata; wordt verondersteld altijd te matchen.
 
 Beide gebeuren onafhankelijk van `processed` — dat gaat uitsluitend over de
-categorie-match, in twee stappen:
+categorie-match, uit drie onafhankelijke signalen:
 
 - **Simpele categorisering** — `Naam` (de tegenpartij-/bedrijfsnaam)
   doorzocht op elke `afschrift_cat_keywords.keyword`-substring (bijv.
@@ -210,14 +210,22 @@ categorie-match, in twee stappen:
   transactieomschrijving) doorzocht op elke
   `afschrift_cat_mededeling_keywords.keyword`-substring/frase, voor
   gevallen waar `Naam` alleen niet genoeg zegt.
+- **Interne overboeking** — structureel anders dan de andere twee, geen
+  keyword-match: `Tegenrekening` die zelf een `Rekening` is die aan
+  dezelfde gebruiker gekoppeld is, wordt automatisch de categorie "Interne
+  overboeking" (`sql/categorization/match_internal_transfer.sql`). Steunt
+  op het bestaan van precies die categorienaam (uit `sql/seed_data.sql`)
+  — er is geen apart schemaveld dat een categorie als "de interne-
+  overboeking-categorie" markeert.
 
-Huidige strategie (nog niet definitief, kan nog wijzigen): beide velden
-worden voor elke rij altijd doorzocht, en de gematchte categorieën uit
-beide bronnen worden samengevoegd tot één verzameling per rij:
+Huidige strategie (nog niet definitief, kan nog wijzigen): alle drie
+signalen worden voor elke rij altijd gecontroleerd, en de gematchte
+categorieën uit alle bronnen worden samengevoegd tot één verzameling per
+rij:
 
 | Waarde | Betekenis |
 |---|---|
-| `0` | Geen enkele categorie-keyword kwam overeen (Naam noch Mededeling). Vereist handmatige categorie-keuze. |
+| `0` | Geen van de drie signalen kwam overeen. Vereist handmatige categorie-keuze. |
 | `1` | Precies één categorie kwam overeen. Klaar voor migratie. |
 | `2` | Ambigu — meer dan één categorie kwam overeen. Vereist een handmatige keuze daartussen. |
 
@@ -228,9 +236,40 @@ voor de SQL-bestanden en `app/categorization.py` voor de orchestratie.
 ### Fase 3 — handmatige controle
 
 Rijen met `processed = 0` of `2` blijven in `temp_afschrift` staan totdat
-de gebruiker ze handmatig oplost in de UI (een categorie toewijzen, een
-rekening corrigeren, kiezen tussen ambigue matches). Eenmaal opgelost,
-worden ze opnieuw gemarkeerd als `processed = 1`.
+de gebruiker ze handmatig oplost (een categorie toewijzen, een rekening
+corrigeren, kiezen tussen ambigue matches). Eenmaal opgelost, worden ze
+opnieuw gemarkeerd als `processed = 1`.
+
+`/review` (`app/routes/review.py`, `sql/queries/temp_afschrift/
+list_all_for_user.sql`) toont **alle** `temp_afschrift`-rijen van de
+ingelogde gebruiker — niet alleen onopgelost/ambigu, ook al opgeloste
+rijen — gegroepeerd in één tabel per Rekening (op naam, niet op ID), elk
+met een eigen opgelost/onopgelost/ambigu-telling, plus een totaaltelling
+bovenaan de pagina.
+
+Categorie toewijzen kan al vanaf dit scherm: elke rij heeft een dropdown
+met alle bestaande categorieën plus een "+ nieuwe categorie…"-optie, maar
+er is één opslaan-knop **per rekeningtabel**, niet per rij
+(`POST /review/{rekening_id}/save`,
+`sql/queries/temp_afschrift/set_category.sql`) — alle dropdown-keuzes in
+die tabel worden in één keer verwerkt. Kiezen (of een nieuwe naam
+intypen) zet `Afschrift_cat_ID` en markeert de rij meteen als
+`processed = 1` — een mens heeft de knoop doorgehakt, ongeacht of de rij
+daarvoor onopgelost, ambigu, of al ergens anders op stond. Een nieuwe
+naam die (case-insensitive) al bestaat wordt hergebruikt in plaats van
+een bijna-duplicaat aan te maken (`sql/queries/categorieen/
+find_by_name.sql`). Zowel de rekening zelf
+(`sql/queries/rekeningen/find_by_id_for_user.sql`) als elke individuele
+rij-update zijn gescopet op de ingelogde gebruiker — geen route hoeft dit
+los te verifiëren.
+
+Na het opslaan wordt meteen dezelfde "is deze rekening klaar?"-check
+uitgevoerd die migratie straks nodig heeft: zijn álle rijen van die
+rekening nu `processed = 1`? Zo ja, toont de pagina dat de tabel klaar is
+voor migratie naar `afschrift` — **maar migreert nog niets**, dat is Fase
+4 en wordt apart gebouwd. Zo nee, blijft de tabel gewoon staan voor
+verdere correctie. Rekening corrigeren en kiezen tussen ambigue matches
+zijn nog niet gebouwd.
 
 ### Fase 4 — migratie (`temp_afschrift` → `afschrift`)
 

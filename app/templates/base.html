@@ -14,6 +14,7 @@
         <a href="/">Dashboard</a>
         <a href="/accounts">Rekeningen</a>
         <a href="/upload">Upload</a>
+        <a href="/review">Controle</a>
         <span class="muted">{{ request.session.get("user_name") }}</span>
         <form method="post" action="/logout" class="inline-form">
           <button type="submit" class="link-button">Uitloggen</button>
@@ -23,7 +24,7 @@
       {% endif %}
     </nav>
   </header>
-  <main class="content">
+  <main class="content {% block content_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
 </body>
