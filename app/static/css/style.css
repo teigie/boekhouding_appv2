@@ -42,10 +42,34 @@ body {
   font-size: 1.05rem;
 }
 
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.topbar__pages {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.topbar__account {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--border);
+}
+
 .topbar__nav a {
   color: var(--muted);
   text-decoration: none;
   font-size: 0.9rem;
+}
+
+.topbar__nav a:hover {
+  color: var(--text);
 }
 
 .content {
@@ -216,6 +240,23 @@ form button,
 
 .inline-form {
   display: inline;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .link-button {

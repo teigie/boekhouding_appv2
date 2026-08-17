@@ -10,8 +10,7 @@ the project's design (see docs/ARCHITECTURE.md).
 | Path | Purpose | Run when |
 |---|---|---|
 | `schema.sql` | `CREATE TABLE` statements for the whole database | once, on first run against a fresh database |
-| `seed_data.sql` | Mandatory structural reference data (categories, mutation types) | once, right after `schema.sql` |
-| `optional/example_keywords.sql` | One example set of category-keywords — personal, not required | manually, only if useful as a starting point |
+| `seed_data.sql` | Mandatory structural reference data (category suggestions, mutation types) | once, right after `schema.sql` |
 | `upload/` | Post-insert continuity gates per account (balance-chain + dedup) | every upload, inside the insert transaction |
 | `categorization/` | Resolves accepted raw uploads into FK-linked, categorized rows | automatically, right after a batch is accepted |
 | `migration/` | Moves fully-resolved rows into the permanent ledger | not yet implemented — see its README |

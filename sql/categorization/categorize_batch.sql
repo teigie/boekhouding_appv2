@@ -9,7 +9,8 @@
 -- upload time; mutatiesoort_mapping is structural reference data — an
 -- unmatched Mutatiesoort fails the NOT NULL constraint below rather than
 -- being silently treated as "unresolved"). `processed` reflects only the
--- combined category-match outcome, from three independent signals (see
+-- combined category-match outcome, from three independent signals, ALL
+-- scoped to :user_id since categories/keywords are per-user (see
 -- sql/categorization/README.md for each):
 --   - Naam vs. afschrift_cat_keywords ("simple")
 --   - Mededeling vs. afschrift_cat_mededeling_keywords ("difficult")
@@ -40,20 +41,25 @@ WITH naam_matches AS (
     FROM temp_afschrift2 t
     JOIN afschrift_cat_keywords k
         ON t.Naam LIKE '%' || k.keyword || '%'
+       AND k.user_ID = :user_id
     WHERE t.Rekening = :rekening_text
 ),
 mededeling_matches AS (
+    -- k.naam_keyword is an OPTIONAL paired condition — see
+    -- sql/schema.sql's comment on afschrift_cat_mededeling_keywords.
     SELECT DISTINCT t.ID AS temp_id, k.cat_ID
     FROM temp_afschrift2 t
     JOIN afschrift_cat_mededeling_keywords k
         ON t.Mededeling LIKE '%' || k.keyword || '%'
+       AND (k.naam_keyword IS NULL OR t.Naam LIKE '%' || k.naam_keyword || '%')
+       AND k.user_ID = :user_id
     WHERE t.Rekening = :rekening_text
 ),
 internal_transfer_matches AS (
     SELECT DISTINCT t.ID AS temp_id, ic.ID AS cat_ID
     FROM temp_afschrift2 t
     JOIN Rekening tegenrekening ON tegenrekening.name = t.Tegenrekening
-    JOIN afschrift_categorien ic ON ic.Name = 'Interne overboeking'
+    JOIN afschrift_categorien ic ON ic.Name = 'Interne overboeking' AND ic.user_ID = :user_id
     WHERE t.Rekening = :rekening_text
       AND tegenrekening.user_ID = :user_id
 ),

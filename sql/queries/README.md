@@ -5,11 +5,12 @@ plus small reusable write templates), as opposed to the one-time
 schema/seed files or the pipeline stages in `sql/categorization/` and
 `sql/migration/`.
 
-- `reference_data/` — templates for adding/removing categories and
-  category-keywords after installation (see each file for its expected
-  named parameters). Removal is deliberately limited to keywords only —
-  see `reference_data/remove_keyword.sql` for why categories aren't
-  removable by default.
+- `reference_data/` — templates for adding/removing a user's own
+  categories and category-keywords (see each file for its expected named
+  parameters). Category removal cascades its keywords (`ON DELETE CASCADE`
+  on `cat_ID`) but is blocked by the caller (`app/routes/categories.py`)
+  if the category is still referenced by `temp_afschrift`/`afschrift`
+  rows — see `categorieen/count_usage_for_user.sql`.
 - `users/` — login/signup: list, create, find-by-id, touch last-logged-in.
 - `rekeningen/` — accounts: list for a user, create/link, find-by-name
   (used by the upload pipeline to resolve + authorize an account),
@@ -18,9 +19,13 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
 - `mutatiesoorten/` — find-by-name (used by the upload pipeline's
   pre-insert Mutatiesoort gate, and by categorization to resolve
   `Mutatiesoort_ID`).
-- `categorieen/` — spending categories: the dashboard's listing, plus
-  find-by-name (used by `/review`'s "add new category" flow to reuse an
-  existing name instead of creating a near-duplicate).
+- `categorieen/` — a user's own spending categories: list-for-user (the
+  dashboard, `/review`'s dropdown, `/categories`), find-by-name (used by
+  `/review`'s "add new category" flow and `/categories` to reuse an
+  existing name instead of creating a near-duplicate), find-by-id-for-user
+  (ownership check before mutating), list-suggestions (the global,
+  non-user-scoped template list of category names offered as quick-add
+  chips on `/categories`), count-usage-for-user (the delete guard).
 - `temp_afschrift/` — the `/review` page: every row (any `processed`
   value) across a user's accounts, with Rekening/category names resolved
   for display (`list_all_for_user.sql`), and the write behind its

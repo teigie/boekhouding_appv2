@@ -13,20 +13,33 @@ treated as "unresolved"). See docs/ARCHITECTURE.md.
 `processed` reflects only the category-match outcome, from three
 independent signals:
 
+Categories and both keyword tables are per-user (like `Rekening`) — every
+one of the three signals below is scoped to the categorizing user's own
+`user_ID`, so one user's transactions can never match against another
+user's categories or keywords, even if the keyword text happens to be
+identical.
+
 - **Simple categorization** — `Naam` (counterparty/merchant name) checked
-  against `afschrift_cat_keywords` (short substrings, e.g. "Lidl" ->
-  Levensmiddelen). Already has example data — see
-  `sql/optional/example_keywords.sql`.
+  against the user's own `afschrift_cat_keywords` rows (short substrings,
+  e.g. "Lidl" -> Levensmiddelen). Managed via `/categories`.
 - **Difficult categorization** — `Mededeling` (free-text transaction
-  description) checked against `afschrift_cat_mededeling_keywords`
-  (longer phrases/sentences, not just single words) — no data yet, an
-  empty table, since this is new.
+  description) checked against the user's own
+  `afschrift_cat_mededeling_keywords` rows (longer phrases/sentences, not
+  just single words). Each row can OPTIONALLY pair its Mededeling keyword
+  with a `naam_keyword` that must ALSO be found in `Naam` for the row to
+  match — e.g. Mededeling "Vakantiegeld" paired with Naam "vakantie",
+  precise together even though neither substring alone would be. Left
+  `NULL`, a row matches on Mededeling alone, same as before. Managed via
+  `/categories`.
 - **Internal transfer** — structurally different from the other two, not
   a keyword match at all: `Tegenrekening` resolving to another `Rekening`
   linked to the *same* user is categorized as "Interne overboeking"
-  (`match_internal_transfer.sql`). Relies on that category existing under
-  that exact name (seeded by `sql/seed_data.sql`) — there's no dedicated
-  schema flag for "the internal-transfer category".
+  (`match_internal_transfer.sql`). Relies on a category existing under
+  that exact name *for that user* — there's no dedicated schema flag for
+  "the internal-transfer category". New users start with zero categories
+  (see `sql/seed_data.sql`), so this signal simply matches nothing until a
+  user adds "Interne overboeking" themselves (offered as one of the
+  quick-add suggestions on `/categories`).
 
 Current combination strategy (**not final, expected to change**): all
 three signals are always checked for every row, and the categories

@@ -27,7 +27,7 @@ router = APIRouter()
 
 _LIST_ALL_SQL = (SQL_DIR / "queries" / "temp_afschrift" / "list_all_for_user.sql").read_text(encoding="utf-8")
 _SET_CATEGORY_SQL = (SQL_DIR / "queries" / "temp_afschrift" / "set_category.sql").read_text(encoding="utf-8")
-_LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_categories.sql").read_text(encoding="utf-8")
+_LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _FIND_CATEGORY_SQL = (SQL_DIR / "queries" / "categorieen" / "find_by_name.sql").read_text(encoding="utf-8")
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
 _FIND_REKENING_FOR_USER_SQL = (
@@ -59,21 +59,21 @@ def _grouped_by_rekening(rows):
     return groups
 
 
-def _resolve_category_id(conn, cat_id_raw: str, new_name_raw: str):
+def _resolve_category_id(conn, user_id: int, cat_id_raw: str, new_name_raw: str):
     """Turn a submitted (cat_id, new_category_name) pair into a concrete
     category ID, adding the category first if it's genuinely new — reusing
     an existing (case-insensitive) name instead of duplicating it. Returns
     None if there's nothing usable to resolve (empty selection, or an
-    empty typed name)."""
+    empty typed name). New/reused categories are scoped to user_id."""
     if cat_id_raw == _NEW_CATEGORY_VALUE:
         name = new_name_raw.strip()
         if not name:
             return None
-        existing = conn.execute(_FIND_CATEGORY_SQL, {"name": name}).fetchone()
+        existing = conn.execute(_FIND_CATEGORY_SQL, {"user_id": user_id, "name": name}).fetchone()
         if existing:
             return existing["ID"]
-        cursor = conn.execute(_ADD_CATEGORY_SQL, {"name": name})
-        log.info("New category '%s' added via /review", name)
+        cursor = conn.execute(_ADD_CATEGORY_SQL, {"name": name, "user_id": user_id})
+        log.info("New category '%s' added via /review for user %s", name, user_id)
         return cursor.lastrowid
     if not cat_id_raw:
         return None
@@ -92,7 +92,7 @@ def review_page(request: Request):
     conn = get_connection()
     try:
         rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
-        categories = conn.execute(_LIST_CATEGORIES_SQL).fetchall()
+        categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
@@ -127,7 +127,7 @@ async def save_categories(request: Request, rekening_id: int):
                 continue
             row_id = int(key.removeprefix("cat_id_"))
             new_name_raw = form.get(f"new_category_name_{row_id}", "")
-            resolved_cat_id = _resolve_category_id(conn, cat_id_raw, new_name_raw)
+            resolved_cat_id = _resolve_category_id(conn, user["id"], cat_id_raw, new_name_raw)
             if resolved_cat_id is None:
                 continue
             cursor = conn.execute(

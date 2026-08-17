@@ -42,6 +42,17 @@ systeembreed maar bij één gebruiker horen. Gebruikers kunnen meer dan één
 rekening koppelen op `/accounts` (`app/routes/accounts.py`); een rekening
 kan maar bij één gebruiker horen.
 
+Uitgavencategorieën (`afschrift_categorien`) en hun keywords
+(`afschrift_cat_keywords`/`afschrift_cat_mededeling_keywords`) zijn op
+dezelfde manier per gebruiker: elke gebruiker bouwt en beheert zijn eigen
+lijst op `/categories` (`app/routes/categories.py`), volledig los van wat
+andere gebruikers hebben. Een nieuwe gebruiker start met een lege lijst;
+de 14 namen die vroeger de vaste globale set waren (Auto, Wonen, Interne
+overboeking, …) staan nog wel klaar als eenmalig aan te klikken
+suggesties, in de losstaande, niet-gebruikersgebonden tabel
+`afschrift_categorie_suggesties` (gevuld door `sql/seed_data.sql`) — puur
+een hulplijstje voor de UI, nooit gebruikt bij het categoriseren zelf.
+
 ## Waarom SQL-first
 
 Categorisering en het verplaatsen van data gebeurt met handgeschreven
@@ -201,22 +212,32 @@ SQL herleidt de foreign keys van elke rij:
   structurele referentiedata; wordt verondersteld altijd te matchen.
 
 Beide gebeuren onafhankelijk van `processed` — dat gaat uitsluitend over de
-categorie-match, uit drie onafhankelijke signalen:
+categorie-match, uit drie onafhankelijke signalen, elk gescopet op de
+`user_ID` van de categoriserende gebruiker (categorieën en keywords zijn
+per gebruiker, zie "Identiteit & rekeningen" hierboven):
 
 - **Simpele categorisering** — `Naam` (de tegenpartij-/bedrijfsnaam)
-  doorzocht op elke `afschrift_cat_keywords.keyword`-substring (bijv.
-  "Lidl" → Levensmiddelen).
+  doorzocht op elke `afschrift_cat_keywords.keyword`-substring van de
+  gebruiker zelf (bijv. "Lidl" → Levensmiddelen).
 - **Moeilijke categorisering** — `Mededeling` (de vrije-tekst
   transactieomschrijving) doorzocht op elke
-  `afschrift_cat_mededeling_keywords.keyword`-substring/frase, voor
-  gevallen waar `Naam` alleen niet genoeg zegt.
+  `afschrift_cat_mededeling_keywords.keyword`-substring/frase van de
+  gebruiker zelf, voor gevallen waar `Naam` alleen niet genoeg zegt. Elke
+  rij kan optioneel gekoppeld worden aan een `naam_keyword` dat dan ook in
+  `Naam` moet voorkomen wil de rij matchen (bijv. Mededeling
+  "Vakantiegeld" gekoppeld aan Naam "vakantie" — samen precies genoeg,
+  terwijl geen van beide op zichzelf dat zou zijn). Zonder koppeling
+  (`NULL`) is Mededeling alleen voldoende, zoals voorheen.
 - **Interne overboeking** — structureel anders dan de andere twee, geen
   keyword-match: `Tegenrekening` die zelf een `Rekening` is die aan
   dezelfde gebruiker gekoppeld is, wordt automatisch de categorie "Interne
   overboeking" (`sql/categorization/match_internal_transfer.sql`). Steunt
-  op het bestaan van precies die categorienaam (uit `sql/seed_data.sql`)
-  — er is geen apart schemaveld dat een categorie als "de interne-
-  overboeking-categorie" markeert.
+  op het bestaan van precies die categorienaam *voor die gebruiker* — er
+  is geen apart schemaveld dat een categorie als "de interne-
+  overboeking-categorie" markeert. Een nieuwe gebruiker heeft die
+  categorie nog niet (iedereen start leeg), dus dit signaal matcht simpelweg
+  niets totdat de gebruiker hem zelf toevoegt (staat klaar als suggestie
+  op `/categories`).
 
 Huidige strategie (nog niet definitief, kan nog wijzigen): alle drie
 signalen worden voor elke rij altijd gecontroleerd, en de gematchte
@@ -318,9 +339,8 @@ aanpassingen:
 - De database wordt bij de eerste run gegenereerd uit `sql/schema.sql` +
   `sql/seed_data.sql` — nooit gecommit (zie `.gitignore`).
 - `sql/seed_data.sql` bevat alleen structurele referentiedata die elke
-  installatie nodig heeft (categorieën, de mutatiesoort-vocabulaire van
-  de bank). Persoonlijke categorie-keywords (bijv. "Esso" → Auto) staan
-  los in `sql/optional/example_keywords.sql`, duidelijk gemarkeerd als
-  het voorbeeld van één persoon in plaats van iets waar een verse
-  installatie aan vastzit — zie dat bestand en
-  `sql/queries/reference_data/` om je eigen lijst op te bouwen.
+  installatie nodig heeft: de mutatiesoort-vocabulaire van de bank, en de
+  globale, niet-gebruikersgebonden lijst met categorie-suggesties
+  (`afschrift_categorie_suggesties`). Echte categorieën en hun keywords
+  (bijv. "Esso" → Auto) zijn persoonlijk per gebruiker en worden opgebouwd
+  via `/categories` (`app/routes/categories.py`), niet via seed-data.

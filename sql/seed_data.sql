@@ -1,12 +1,15 @@
 -- Mandatory reference data, run once against a fresh database, right after
 -- schema.sql (see app/db.py::init_db). This covers structural data every
--- installation needs: spending categories and the bank's mutation-type
--- vocabulary. It does NOT include category keywords (e.g. "Esso" -> Auto) —
--- those are personal to whoever uses the app, see sql/optional/.
+-- installation needs: category suggestions and the bank's mutation-type
+-- vocabulary. It does NOT include actual categories or their keywords
+-- (e.g. "Esso" -> Auto) — those are per-user, built via /categories.
 --
 -- Uses INSERT OR IGNORE so this file stays safe to re-run or extend later.
 
-insert or ignore into afschrift_categorien (Name)
+-- Not real categories — a fixed, global list of names offered as
+-- one-click suggestions on /categories. Every new user starts with an
+-- empty afschrift_categorien; this just saves retyping the common ones.
+insert or ignore into afschrift_categorie_suggesties (Name)
 values ("Auto"),("OV"),("Abonnementen"),("Wonen"),("Inboedel"),
 ("Levensmiddelen"),("Zorgkosten"),("Hobbies"),("Kleding"),
 ("Huisdieren"),("Interne overboeking"),("Vakantie"),("Uitjes/uit eten"),("Overig");

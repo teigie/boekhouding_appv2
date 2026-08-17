@@ -5,6 +5,58 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-17 — Paired Naam keyword for difficult categorization
+
+- Added an optional `naam_keyword` column to
+  `afschrift_cat_mededeling_keywords`: a difficult (Mededeling) keyword
+  can now be paired with a Naam substring that must ALSO match, e.g.
+  Mededeling "Vakantiegeld" + Naam "vakantie" for the "Vakantie"
+  category — precise together even though neither alone would be. Left
+  blank, a keyword still matches on Mededeling only, unchanged from
+  before.
+- Updated `sql/categorization/match_mededeling_keywords.sql` and
+  `categorize_batch.sql`'s embedded copy to apply the paired condition
+  when set.
+- `/categories` gained an optional "Gekoppeld Naam-keyword" field on the
+  difficult-keyword add form, and shows the pairing next to each keyword.
+- Added `scripts/migrate_add_naam_keyword_pairing.py` — a plain `ALTER
+  TABLE ADD COLUMN` (nullable, no rebuild needed) for existing databases.
+
+### 2026-08-17 — Per-user categories & keywords
+
+- Made spending categories (`afschrift_categorien`) and both keyword
+  tables (`afschrift_cat_keywords`, `afschrift_cat_mededeling_keywords`)
+  per-user, the same isolation pattern already used for `Rekening`: each
+  gained a `user_ID` column + FK, and their uniqueness constraints moved
+  from global to `UNIQUE(user_ID, ...)`. `cat_ID` on both keyword tables
+  now cascades on delete, which is what makes category deletion safe.
+- Added `afschrift_categorie_suggesties`, a small global (non-user-scoped)
+  reference table seeded with the previous 14 default category names —
+  offered as one-click "quick add" suggestions on the new `/categories`
+  page. New users start with zero categories; these are just a template,
+  never auto-inserted and never used by categorization matching.
+- Added `app/routes/categories.py` + `app/templates/categories.html`: the
+  first UI for managing categories and keywords at all (add/delete a
+  category with an in-use guard, add/delete simple and difficult
+  keywords per category) — previously only inline category creation
+  existed, on `/review`, and keywords had no UI whatsoever.
+- Scoped every categorization-matching query
+  (`sql/categorization/match_naam_keywords.sql`,
+  `match_mededeling_keywords.sql`, `match_internal_transfer.sql`,
+  `categorize_batch.sql`) to the categorizing user's own `user_ID`, so one
+  user's transactions can never match against another user's categories
+  or keywords. Also closed a related gap in
+  `sql/queries/temp_afschrift/set_category.sql`, which validated the
+  `temp_afschrift` row's ownership but not the category being assigned.
+- Retired `sql/optional/example_keywords.sql` (hardcoded IDs from the old
+  fixed global seed order, no longer meaningful) — its purpose is now
+  fully covered by the `/categories` UI.
+- Added `scripts/migrate_categories_per_user.py`, a one-off script to
+  upgrade an existing `data/boekhouding.db` in place: rebuilds the three
+  affected tables with the new schema, backfills all existing rows to the
+  current single user, and seeds `afschrift_categorie_suggesties` — with
+  a timestamped backup, a `--dry-run` mode, and an idempotency guard.
+
 ### 2026-08-13 — Project scaffold
 
 - Set up the FastAPI + SQLite project structure: `app/` (backend),

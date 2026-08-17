@@ -23,11 +23,15 @@
 
     <section class="card">
       <h2>Categorieën</h2>
-      <ul>
-        {% for c in categorieen %}
-          <li>{{ c["Name"] }}</li>
-        {% endfor %}
-      </ul>
+      {% if categorieen %}
+        <ul>
+          {% for c in categorieen %}
+            <li>{{ c["Name"] }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Nog geen categorieën — beheer ze op de <a href="/categories">Categorieën</a>-pagina.</p>
+      {% endif %}
     </section>
   </div>
 {% endblock %}

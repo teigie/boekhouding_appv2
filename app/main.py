@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import BASE_DIR
 from app.db import init_db
 from app.logging_config import get_app_logger, setup_logging
-from app.routes import accounts, auth, dashboard, review, upload
+from app.routes import accounts, auth, categories, dashboard, review, upload
 from app.session import get_or_create_session_secret
 
 setup_logging()
@@ -36,6 +36,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="s
 
 app.include_router(auth.router)
 app.include_router(accounts.router)
+app.include_router(categories.router)
 app.include_router(dashboard.router)
 app.include_router(upload.router)
 app.include_router(review.router)

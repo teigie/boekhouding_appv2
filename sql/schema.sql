@@ -29,9 +29,26 @@ create table Rekening (
 -- Reference / lookup tables
 -- ---------------------------------------------------------------------------
 
+-- Spending categories are per-user, same isolation pattern as Rekening:
+-- each user builds and owns their own list, independent of everyone
+-- else's. Name's case-insensitive collation makes the (user_ID, Name)
+-- uniqueness constraint itself case-insensitive, matching the app-level
+-- "reuse this name" check in /review.
 create table afschrift_categorien (
 	ID integer primary key autoincrement,
-	Name varchar(30)
+	Name varchar(30) not null collate nocase,
+	user_ID integer not null,
+	foreign key (user_ID) references Users(ID),
+	unique (user_ID, Name)
+);
+
+-- Global, NOT user-scoped: a fixed list of category names offered as
+-- one-click "suggestion" chips on /categories for new/empty users. Never
+-- inserted into any user's afschrift_categorien automatically, and never
+-- joined into categorization matching — purely a UI template list.
+create table afschrift_categorie_suggesties (
+	ID integer primary key autoincrement,
+	Name varchar(30) not null unique
 );
 
 create table mutatiesoort (
@@ -47,22 +64,41 @@ create table mutatiesoort_mapping (
 
 -- "Simple" categorization: substrings of Naam (the counterparty/merchant
 -- name) that auto-assign a category, e.g. "Lidl" -> Levensmiddelen.
+-- Per-user like afschrift_categorien itself — cat_ID cascades on delete
+-- so removing a category takes its keywords with it.
 create table afschrift_cat_keywords (
 	ID integer primary key autoincrement,
-	keyword varchar(30) not null unique,
-	cat_ID integer,
-	foreign key (cat_ID) references afschrift_categorien(ID)
+	keyword varchar(30) not null,
+	cat_ID integer not null,
+	user_ID integer not null,
+	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
+	foreign key (user_ID) references Users(ID),
+	unique (user_ID, keyword)
 );
 
 -- "Difficult" categorization: substrings of Mededeling (the free-text
 -- transaction description), checked in addition to afschrift_cat_keywords
 -- when Naam alone isn't conclusive. Wider than a merchant name, so this
--- allows longer phrases/sentences, not just single words.
+-- allows longer phrases/sentences, not just single words. Per-user, same
+-- shape as afschrift_cat_keywords above.
+--
+-- naam_keyword is an OPTIONAL paired condition: when set, a match
+-- requires BOTH `keyword` in Mededeling AND naam_keyword in Naam — e.g.
+-- Mededeling keyword "Vakantiegeld" paired with Naam keyword "vakantie",
+-- so the combination is precise even though neither substring alone
+-- would be. When left NULL, behaves exactly like before: Mededeling
+-- alone is enough. This is what extends "difficult" categorization with
+-- the same substring-matching idea "simple" categorization already uses
+-- for Naam, without requiring a second, separate simple keyword to exist.
 create table afschrift_cat_mededeling_keywords (
 	ID integer primary key autoincrement,
-	keyword varchar(200) not null unique,
-	cat_ID integer,
-	foreign key (cat_ID) references afschrift_categorien(ID)
+	keyword varchar(200) not null,
+	naam_keyword varchar(30),
+	cat_ID integer not null,
+	user_ID integer not null,
+	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
+	foreign key (user_ID) references Users(ID),
+	unique (user_ID, keyword)
 );
 
 -- ---------------------------------------------------------------------------
