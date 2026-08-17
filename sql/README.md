@@ -13,7 +13,7 @@ the project's design (see docs/ARCHITECTURE.md).
 | `seed_data.sql` | Mandatory structural reference data (category suggestions, mutation types) | once, right after `schema.sql` |
 | `upload/` | Post-insert continuity gates per account (balance-chain + dedup) | every upload, inside the insert transaction |
 | `categorization/` | Resolves accepted raw uploads into FK-linked, categorized rows | automatically, right after a batch is accepted |
-| `migration/` | Moves fully-resolved rows into the permanent ledger | not yet implemented — see its README |
+| `migration/` | Moves fully-resolved rows into the permanent ledger | on demand, via `POST /review/{rekening_id}/migrate` |
 | `queries/` | App-facing selects, plus reference-data add/remove templates | ongoing, as features are built |
 
 The database file itself (`data/boekhouding.db`) is generated from these

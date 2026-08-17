@@ -5,6 +5,40 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-17 — Fase 4: migrate resolved rows into `afschrift`
+
+- Implemented the `temp_afschrift` → `afschrift` migration step (Fase 4,
+  see `docs/ARCHITECTURE.md`), previously just a `sql/migration/README.md`
+  plan. New `app/migration.py::migrate_account(rekening_id, user_id)`:
+  all-or-nothing per account, refuses (raises `NotFullyResolvedError`,
+  nothing touched) unless every `temp_afschrift` row for that account —
+  including leftovers from earlier uploads — is `processed = 1`
+  (`sql/migration/count_unresolved.sql`). On success, inserts the account's
+  full backlog into `afschrift` in strict original order
+  (`sql/migration/insert_into_afschrift.sql`) and deletes it from
+  `temp_afschrift` (`sql/migration/delete_from_temp_afschrift.sql`), in one
+  transaction — same insert-then-delete shape as Fase 2's
+  `categorize_batch.sql` + `clear_temp_afschrift2.sql`. Both the guard and
+  the insert/delete are scoped through `Rekening.user_ID`, same defense in
+  depth as `set_category.sql`.
+- New route `POST /review/{rekening_id}/migrate`
+  (`app/routes/review.py::migrate_to_afschrift`): verifies the account
+  belongs to the logged-in user, then calls `migrate_account` — which
+  re-checks the "fully resolved" condition against the database itself
+  rather than trusting the already-rendered page. On success, redirects to
+  `/review`; on `NotFullyResolvedError`, re-renders `/review` with a Dutch
+  error message and a 400 status.
+- `/review`'s per-account table now shows a "Migreren naar afschrift"
+  button (via `formaction`, alongside the existing "Tabel opslaan" button
+  in the same `<form>`) once every row in that table is resolved, instead
+  of the previous static "nog niet geïmplementeerd" note.
+- Verified against the dev database's two real accounts: the fully
+  resolved account migrated its rows into `afschrift` and disappeared from
+  `/review` once empty; the account with 2 remaining unresolved rows was
+  refused with the error message and left completely untouched; a crafted
+  `rekening_id` for another user's account is rejected before any check
+  runs.
+
 ### 2026-08-17 — Paired Naam keyword for difficult categorization
 
 - Added an optional `naam_keyword` column to

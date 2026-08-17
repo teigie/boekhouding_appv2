@@ -3,12 +3,14 @@
 {% block content_class %}content--wide{% endblock %}
 {% block content %}
   <h1>Handmatige controle</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
   <p class="muted">
     Alle rijen die klaarstaan in <code>temp_afschrift</code>, per rekening
     in een eigen tabel — opgelost én nog niet. Kies per rij een categorie
-    en sla de hele tabel in één keer op. Rekening corrigeren, kiezen
-    tussen ambigue matches en migreren naar <code>afschrift</code> komen
-    in latere stappen.
+    en sla de hele tabel in één keer op. Zodra een tabel volledig opgelost
+    is, kun je hem migreren naar het permanente grootboek
+    (<code>afschrift</code>). Rekening corrigeren en kiezen tussen
+    ambigue matches komen in latere stappen.
   </p>
 
   {% if not groups %}
@@ -89,7 +91,10 @@
           <div class="table-actions">
             <button type="submit">Tabel opslaan</button>
             {% if group.all_resolved %}
-              <span class="result-ok">✓ Alle rijen opgelost — klaar voor migratie naar afschrift (nog niet geïmplementeerd).</span>
+              <button type="submit" formaction="/review/{{ group.rekening_id }}/migrate">
+                Migreren naar afschrift
+              </button>
+              <span class="result-ok">✓ Alle rijen opgelost.</span>
             {% else %}
               <span class="muted">Nog niet alle rijen zijn opgelost.</span>
             {% endif %}

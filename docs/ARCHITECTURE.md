@@ -285,28 +285,44 @@ rij-update zijn gescopet op de ingelogde gebruiker — geen route hoeft dit
 los te verifiëren.
 
 Na het opslaan wordt meteen dezelfde "is deze rekening klaar?"-check
-uitgevoerd die migratie straks nodig heeft: zijn álle rijen van die
-rekening nu `processed = 1`? Zo ja, toont de pagina dat de tabel klaar is
-voor migratie naar `afschrift` — **maar migreert nog niets**, dat is Fase
-4 en wordt apart gebouwd. Zo nee, blijft de tabel gewoon staan voor
-verdere correctie. Rekening corrigeren en kiezen tussen ambigue matches
-zijn nog niet gebouwd.
+uitgevoerd die migratie nodig heeft: zijn álle rijen van die rekening nu
+`processed = 1`? Zo ja, toont de pagina naast de tabel een "Migreren naar
+afschrift"-knop (`POST /review/{rekening_id}/migrate`, zie Fase 4
+hieronder). Zo nee, blijft de tabel gewoon staan voor verdere correctie.
+Rekening corrigeren en kiezen tussen ambigue matches zijn nog niet
+gebouwd.
 
 ### Fase 4 — migratie (`temp_afschrift` → `afschrift`)
 
-Migratie is **alles-of-niets per rekening**: het draait alleen voor een
-bepaalde `Rekening_ID` zodra *elke* wachtende rij voor die rekening —
-inclusief rijen uit eerdere uploads die onopgelost bleven — `processed = 1`
-is. Dit volgt direct uit het feit dat rijvolgorde dragend is: een
-onopgeloste rij overslaan en later, buiten de volgorde, invoegen zou de
-saldoketen van elke rij daarna corrumperen. Andere rekeningen worden
-hierdoor niet beïnvloed — één rommelige rekening blokkeert de migratie
-van een schone rekening niet.
+Migratie is **alles-of-niets per rekening**: `app/migration.py::migrate_account`
+draait alleen voor een bepaalde `Rekening_ID` zodra *elke* wachtende rij
+voor die rekening — inclusief rijen uit eerdere uploads die onopgelost
+bleven — `processed = 1` is (`sql/migration/count_unresolved.sql`). Dit
+volgt direct uit het feit dat rijvolgorde dragend is: een onopgeloste rij
+overslaan en later, buiten de volgorde, invoegen zou de saldoketen van
+elke rij daarna corrumperen. Andere rekeningen worden hierdoor niet
+beïnvloed — één rommelige rekening blokkeert de migratie van een schone
+rekening niet.
 
-Wanneer het draait: rijen worden in strikte oorspronkelijke volgorde
-ingevoegd in `afschrift`, en daarna verwijderd uit `temp_afschrift`.
+Voldoet de rekening niet, dan wordt niets aangepast: `migrate_account`
+gooit `NotFullyResolvedError` en `POST /review/{rekening_id}/migrate`
+rendert `/review` opnieuw met een foutmelding (400). Voldoet de rekening
+wel, dan draait in één transactie: rijen worden in strikte oorspronkelijke
+volgorde ingevoegd in `afschrift` (`sql/migration/insert_into_afschrift.sql`,
+`ORDER BY temp_afschrift.ID`), en daarna verwijderd uit `temp_afschrift`
+(`sql/migration/delete_from_temp_afschrift.sql`) — zelfde
+insert-dan-delete-in-één-transactie-vorm als Fase 2's
+`categorize_batch.sql` + `clear_temp_afschrift2.sql`. Zowel de guard als
+de insert/delete zijn gescopet op `user_ID` (via `Rekening`), net als
+`set_category.sql` — een geraden `rekening_id` van een andere gebruiker
+raakt nooit rijen aan.
 
-*(Nog niet geïmplementeerd — zie `sql/migration/README.md`.)*
+De route zelf (`app/routes/review.py::migrate_to_afschrift`) verifieert
+eerst dat `rekening_id` van de ingelogde gebruiker is
+(`sql/queries/rekeningen/find_by_id_for_user.sql`), en vertrouwt daarna
+niet op wat de pagina op dat moment toont — de "is deze rekening
+klaar?"-conditie wordt in de database zelf herbevestigd door
+`migrate_account`, niet aangenomen vanuit de eerder gerenderde pagina.
 
 ### Fase 5 — het grootboek (`afschrift`)
 

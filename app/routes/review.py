@@ -1,15 +1,18 @@
-"""Manual-review overview (Fase 3, see docs/ARCHITECTURE.md). Lists every
-temp_afschrift row (any `processed` status) for the logged-in user's own
-accounts, grouped in one table per Rekening, so both what's still pending
-and what's already resolved are visible in one place.
+"""Manual-review overview (Fase 3, see docs/ARCHITECTURE.md), plus the
+Fase 4 migration trigger. Lists every temp_afschrift row (any `processed`
+status) for the logged-in user's own accounts, grouped in one table per
+Rekening, so both what's still pending and what's already resolved are
+visible in one place.
 
-Correcting a row's category is the one thing this page can do so far — a
+Correcting a row's category is the main thing this page can do — a
 dropdown per row, saved for a whole account's table in one go via a single
-button. Saving re-runs the same "is this account fully resolved" check the
-future migration step will need, and says so on the page — but it does NOT
-migrate anything into `afschrift` yet, that's a separate, later feature.
+button. Saving re-runs the "is this account fully resolved" check the
+migration step needs, and shows a "Migreren naar afschrift"-button under a
+fully resolved table. That button posts to /review/{rekening_id}/migrate,
+which re-checks the same condition against the database (never trusts the
+already-rendered page state) via app/migration.py before moving anything.
 Correcting the account or picking between ambiguous keyword matches is
-also still a later step.
+still a later step.
 """
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
@@ -17,6 +20,7 @@ from fastapi.responses import RedirectResponse
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
+from app.migration import NotFullyResolvedError, migrate_account
 from app.session import require_login
 from app.templating import templates
 
@@ -107,9 +111,10 @@ def review_page(request: Request):
 async def save_categories(request: Request, rekening_id: int):
     """Saves every row's category dropdown for one account's table in a
     single submit. Once saved, checks whether the account is now fully
-    resolved (every row `processed = 1`) — the same precondition the
-    migration step will require — and surfaces that on the page. It does
-    NOT migrate anything into `afschrift` itself; that's a later feature."""
+    resolved (every row `processed = 1`) — the precondition
+    migrate_to_afschrift below requires — and surfaces that on the page.
+    It does NOT migrate anything into `afschrift` itself; that's the
+    separate migrate_to_afschrift route below."""
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -145,3 +150,50 @@ async def save_categories(request: Request, rekening_id: int):
         conn.close()
 
     return RedirectResponse(f"/review#rekening-{rekening_id}", status_code=303)
+
+
+@router.post("/review/{rekening_id}/migrate")
+def migrate_to_afschrift(request: Request, rekening_id: int):
+    """Fase 4: migrates one account's fully-resolved temp_afschrift
+    backlog into the permanent afschrift ledger (app/migration.py).
+    Re-checks ownership and the "fully resolved" precondition against the
+    database itself — never trusts that the page shown to the user is
+    still accurate — and refuses with a 400 + Dutch error, re-rendering
+    the review page, if either fails."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        rekening = conn.execute(_FIND_REKENING_FOR_USER_SQL, {"id": rekening_id, "user_id": user["id"]}).fetchone()
+    finally:
+        conn.close()
+    if rekening is None:
+        return RedirectResponse("/review", status_code=303)
+
+    try:
+        result = migrate_account(rekening_id, user["id"])
+    except NotFullyResolvedError:
+        conn = get_connection()
+        try:
+            rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
+            categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        finally:
+            conn.close()
+        error = (
+            f"Rekening '{rekening['name']}' heeft nog onopgeloste of ambigue rijen "
+            "— migratie is geblokkeerd."
+        )
+        log.warning("Migration refused for Rekening %s (user %s): not fully resolved", rekening_id, user["id"])
+        return templates.TemplateResponse(
+            request,
+            "review.html",
+            {"groups": _grouped_by_rekening(rows), "counts": _counts(rows), "categories": categories, "error": error},
+            status_code=400,
+        )
+
+    if result is None:
+        log.info("Migration no-op for Rekening %s (user %s): nothing pending", rekening_id, user["id"])
+
+    return RedirectResponse("/review", status_code=303)
