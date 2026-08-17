@@ -76,6 +76,25 @@ misleidend pad te tonen. De naam wordt percent-encoded
 (`user_page_url`/Jinja's `urlencode`-filter) zodat een vrij getypte naam
 met spaties of andere tekens de URL niet breekt.
 
+Een categorie toont haar regels op deze pagina alleen **read-only**
+(kolom + keywords per regel, geen inline bewerkknoppen meer) — echt
+aanpassen gebeurt op een eigen pagina, `/categories/regels/{regel_id}/edit`
+(`app/routes/categories.py::edit_regel_page`/`save_regel`, template
+`regel_edit.html`), bereikbaar via de "Aanpassen"-knop op elke regelkaart.
+Die pagina toont alle negen kolommen tegelijk (niet alleen de kolommen
+die de regel al heeft), vooringevuld met de huidige keywords/combine_mode
+waar van toepassing, en slaat op als **volledige vervanging**: alle
+kolom-voorwaarden van de regel worden verwijderd en opnieuw aangemaakt
+uit wat er is ingediend, in één transactie
+(`remove_regel_kolommen_for_regel.sql` gevolgd door dezelfde
+insert-queries als het aanmaken van een nieuwe regel) — pas nadat de
+inzending gevalideerd is, dus een mislukte validatie raakt de bestaande
+regel niet aan. Zo kan een kolom worden toegevoegd, gewijzigd (inclusief
+de EN/OF-modus) of helemaal leeggemaakt (= verwijderd uit de regel) door
+gewoon de tekst in dat kolomveld aan te passen — hetzelfde
+multi-keyword-per-veld-gedrag als bij het aanmaken van een nieuwe regel
+(zie Fase 2 hieronder).
+
 ## Waarom SQL-first
 
 Categorisering en het verplaatsen van data gebeurt met handgeschreven

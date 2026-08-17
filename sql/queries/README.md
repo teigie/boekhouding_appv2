@@ -12,10 +12,11 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   `afschrift_cat_regel_kolommen`/`afschrift_cat_regel_keywords`) but is
   blocked by the caller (`app/routes/categories.py`) if the category is
   still referenced by `temp_afschrift`/`afschrift` rows — see
-  `categorieen/count_usage_for_user.sql`. `remove_empty_regel_kolommen.sql`
-  / `remove_empty_regels.sql` are cleanup sweeps run right after deleting
-  a keyword, so a column-condition or rule that's become empty doesn't
-  linger (see sql/schema.sql's comment on `afschrift_cat_regel_kolommen`).
+  `categorieen/count_usage_for_user.sql`. `remove_regel_kolommen_for_regel.sql`
+  wipes one rule's entire current column-set — the first half of the
+  rule-edit page's "replace" save (see `app/routes/categories.py::save_regel`
+  and `regels/` below), always paired with re-inserting whatever was
+  actually submitted, in the same transaction.
 - `users/` — login/signup: list, create, find-by-id, touch last-logged-in.
 - `rekeningen/` — accounts: list for a user, create/link, find-by-name
   (used by the upload pipeline to resolve + authorize an account),
@@ -43,14 +44,16 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   scoped to the logged-in user's own Rekeningen. Only reads `afschrift`,
   never `temp_afschrift` — rows not yet migrated (Fase 4) don't count
   towards real totals.
-- `regels/` — a user's own categorization rules, nested (rule → column →
-  keywords) for display on the profile page (`list_for_user.sql`), plus
-  the ownership check before adding another keyword to an existing rule's
-  existing column (`find_kolom_for_user.sql`). See
-  `sql/categorization/match_custom_rules.sql` for how these are actually
-  evaluated against transactions — that's a separate, standalone query
-  under `categorization/`, not here, since it runs at categorization time
-  rather than as an app-facing read.
+- `regels/` — a user's own categorization rules: `list_for_user.sql`
+  nests every rule (rule → column → keywords) for the profile page's
+  read-only summary; `find_for_user.sql` is the ownership check for the
+  rule-edit page (`/categories/regels/{regel_id}/edit`) plus its owning
+  category's name for display; `list_kolommen_for_regel.sql` pre-fills
+  that page's per-column textareas/modes from the rule's current state.
+  See `sql/categorization/match_custom_rules.sql` for how rules are
+  actually evaluated against transactions — that's a separate, standalone
+  query under `categorization/`, not here, since it runs at
+  categorization time rather than as an app-facing read.
 
 The Rekeningen and categorieën/keywords management screens (formerly
 separate `/accounts` and `/categories` pages) are now one combined

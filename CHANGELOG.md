@@ -5,6 +5,52 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-17 — Dedicated rule-edit page
+
+- Replaced the profile page's inline per-column "+ keyword" mini-forms
+  and per-keyword delete buttons with a single "Aanpassen" button per
+  rule, linking to a new dedicated page,
+  `GET/POST /categories/regels/{regel_id}/edit`
+  (`app/routes/categories.py::edit_regel_page`/`save_regel`, template
+  `regel_edit.html`). The profile page's rule cards are now read-only
+  summaries (column + keyword chips, no inline edit controls) plus
+  "Aanpassen" and "Regel verwijderen".
+- The edit page shows **all nine** supported columns at once (not just
+  the ones the rule currently has), each pre-filled with its existing
+  keywords (one per line) and combine_mode where set. Saving replaces
+  the rule's entire column/keyword set wholesale in one transaction
+  (`remove_regel_kolommen_for_regel.sql`, then the same insert queries
+  `add_regel` uses) — only after the submission validates, so a rejected
+  save never touches the existing rule. This means a column can now be
+  added, have its AND/OR mode changed, or be cleared out entirely (=
+  removed from the rule) just by editing that column's textarea, lifting
+  the earlier v1 limitation that adding a new column or changing
+  combine_mode required deleting and recreating the whole rule.
+  Multi-keyword-per-column entry (one per line, or comma-separated except
+  for `Bedrag_eur`/`Saldo_na_mutatie` where a comma is the decimal
+  separator) now works identically on both the create-rule form and this
+  edit page.
+- On a validation error (e.g. an invalid Af_bij value, an unparseable
+  amount, or clearing every column), the edit page re-renders with
+  exactly what was just typed, not the stale pre-edit values — so a typo
+  in one column doesn't lose edits already made to others.
+- Removed the now-superseded granular endpoints
+  (`POST /categories/regels/{regel_id}/kolommen/{kolom_id}/keywords`,
+  `POST /categories/regels/keywords/{keyword_id}/delete`) and their
+  now-dead cleanup queries (`remove_empty_regel_kolommen.sql`,
+  `remove_empty_regels.sql` — no longer needed since the edit page never
+  leaves a column-condition or rule empty, it just deletes and
+  recreates the whole set atomically).
+- Verified against an isolated scratch copy of the real (already
+  rule-migrated) database: the edit page pre-fills correctly from an
+  existing rule; adding a brand-new column to an existing rule and
+  removing an existing column in the same save both work; submitting all
+  columns empty is rejected (400, rule left untouched) with the empty
+  state preserved on the re-rendered page; a second user attempting to
+  view or save another user's rule is redirected without touching
+  anything, on both the GET and POST route. No schema change was needed
+  for this, so nothing further to migrate on the real database.
+
 ### 2026-08-17 — General rule-based categorization
 
 - Replaced the old three categorization mechanisms — "simple"

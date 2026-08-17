@@ -13,7 +13,13 @@ import sqlite3
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from app.categorization_rules import COLUMN_NAMES, InvalidKeywordError, normalize_keyword, split_keywords
+from app.categorization_rules import (
+    COLUMN_NAMES,
+    REGEL_KOLOMMEN,
+    InvalidKeywordError,
+    normalize_keyword,
+    split_keywords,
+)
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
@@ -31,8 +37,9 @@ _FIND_CATEGORY_FOR_USER_SQL = (
     SQL_DIR / "queries" / "categorieen" / "find_by_id_for_user.sql"
 ).read_text(encoding="utf-8")
 _COUNT_USAGE_SQL = (SQL_DIR / "queries" / "categorieen" / "count_usage_for_user.sql").read_text(encoding="utf-8")
-_FIND_REGEL_KOLOM_FOR_USER_SQL = (
-    SQL_DIR / "queries" / "regels" / "find_kolom_for_user.sql"
+_FIND_REGEL_FOR_USER_SQL = (SQL_DIR / "queries" / "regels" / "find_for_user.sql").read_text(encoding="utf-8")
+_LIST_KOLOMMEN_FOR_REGEL_SQL = (
+    SQL_DIR / "queries" / "regels" / "list_kolommen_for_regel.sql"
 ).read_text(encoding="utf-8")
 
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
@@ -43,15 +50,23 @@ _ADD_REGEL_KOLOM_SQL = (SQL_DIR / "queries" / "reference_data" / "add_regel_kolo
 _ADD_REGEL_KEYWORD_SQL = (
     SQL_DIR / "queries" / "reference_data" / "add_regel_keyword.sql"
 ).read_text(encoding="utf-8")
-_REMOVE_REGEL_KEYWORD_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "remove_regel_keyword.sql"
+_REMOVE_REGEL_KOLOMMEN_FOR_REGEL_SQL = (
+    SQL_DIR / "queries" / "reference_data" / "remove_regel_kolommen_for_regel.sql"
 ).read_text(encoding="utf-8")
-_REMOVE_EMPTY_REGEL_KOLOMMEN_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "remove_empty_regel_kolommen.sql"
-).read_text(encoding="utf-8")
-_REMOVE_EMPTY_REGELS_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "remove_empty_regels.sql"
-).read_text(encoding="utf-8")
+
+
+def _current_columns_map(rows) -> dict:
+    """Groups list_kolommen_for_regel.sql's flat rows into
+    {kolom: {"mode": "AND"/"OR", "keywords_text": "kw1\\nkw2"}}, ready to
+    pre-fill the rule-edit form's textareas/selects. Also used to rebuild
+    the same shape from a just-submitted (invalid) form, so a validation
+    error re-renders with what the user actually typed, not stale DB
+    values — see save_regel below."""
+    out: dict = {}
+    for row in rows:
+        entry = out.setdefault(row["kolom"], {"mode": row["combine_mode"], "keywords": []})
+        entry["keywords"].append(row["keyword"])
+    return {kolom: {"mode": entry["mode"], "keywords_text": "\n".join(entry["keywords"])} for kolom, entry in out.items()}
 
 
 @router.post("/categories")
@@ -222,13 +237,41 @@ def delete_regel(request: Request, regel_id: int):
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
-@router.post("/categories/regels/{regel_id}/kolommen/{kolom_id}/keywords")
-async def add_regel_keywords(request: Request, regel_id: int, kolom_id: int):
-    """Add one or more additional keywords to a rule's EXISTING
-    column-condition (reusing its current combine_mode). Adding a brand
-    new column to an already-created rule isn't supported — delete and
-    recreate the rule via the "add rule" form instead, which can set
-    every column at once."""
+@router.get("/categories/regels/{regel_id}/edit")
+def edit_regel_page(request: Request, regel_id: int):
+    """Full editor for one rule: every supported column is shown (not
+    just the ones the rule currently has), pre-filled with its existing
+    keywords/mode where set. Reached from the "Aanpassen" button on the
+    profile page's rule cards, which otherwise only show a read-only
+    summary — all add/remove/change-mode editing happens here."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        regel = conn.execute(_FIND_REGEL_FOR_USER_SQL, {"id": regel_id, "user_id": user["id"]}).fetchone()
+        if regel is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+        rows = conn.execute(_LIST_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]}).fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request, "regel_edit.html",
+        {"user": user, "regel": regel, "current": _current_columns_map(rows), "regel_kolommen": REGEL_KOLOMMEN},
+    )
+
+
+@router.post("/categories/regels/{regel_id}/edit")
+async def save_regel(request: Request, regel_id: int):
+    """Saves the rule-edit page as a wholesale replace: every column's
+    current keywords are wiped and re-created from whatever was
+    submitted, in one transaction (see remove_regel_kolommen_for_regel.sql
+    — deleting first is safe since it only commits once the new columns
+    have already been validated). Editing the textarea's content is how
+    you add or remove individual keywords; clearing a column's textarea
+    entirely removes that column-condition from the rule."""
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -236,68 +279,60 @@ async def add_regel_keywords(request: Request, regel_id: int, kolom_id: int):
     form = await request.form()
     conn = get_connection()
     try:
-        kolom = conn.execute(
-            _FIND_REGEL_KOLOM_FOR_USER_SQL, {"kolom_id": kolom_id, "regel_id": regel_id, "user_id": user["id"]}
-        ).fetchone()
-        if kolom is None:
+        regel = conn.execute(_FIND_REGEL_FOR_USER_SQL, {"id": regel_id, "user_id": user["id"]}).fetchone()
+        if regel is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
-        raw_values = split_keywords(form.get("keywords", ""), column=kolom["kolom"])
+        columns = []  # [(kolom, combine_mode, [keyword, ...]), ...]
+        submitted = {}  # kolom -> {"mode", "keywords_text"} as typed, for re-render on error
         error = None
-        if not raw_values:
-            error = "Vul minstens één keyword in."
-        else:
+        for kolom in COLUMN_NAMES:
+            raw_text = form.get(f"{kolom}_keywords", "")
+            mode = form.get(f"{kolom}_mode", "OR")
+            if mode not in ("AND", "OR"):
+                mode = "OR"
+            submitted[kolom] = {"mode": mode, "keywords_text": raw_text}
+
+            raw_values = split_keywords(raw_text, column=kolom)
+            if not raw_values:
+                continue
             try:
-                normalized = [normalize_keyword(kolom["kolom"], v) for v in raw_values]
+                normalized = [normalize_keyword(kolom, v) for v in raw_values]
             except InvalidKeywordError as exc:
                 error = str(exc)
+                break
+            columns.append((kolom, mode, normalized))
+
+        if error is None and not columns:
+            error = "Een regel heeft minstens één voorwaarde nodig — vul minstens één kolom in."
 
         if error is None:
             try:
-                for keyword in normalized:
-                    conn.execute(
-                        _ADD_REGEL_KEYWORD_SQL,
-                        {"regel_kolom_id": kolom_id, "keyword": keyword, "user_id": user["id"]},
+                conn.execute(_REMOVE_REGEL_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]})
+                for kolom, mode, keywords in columns:
+                    kolom_cursor = conn.execute(
+                        _ADD_REGEL_KOLOM_SQL,
+                        {"regel_id": regel_id, "kolom": kolom, "combine_mode": mode, "user_id": user["id"]},
                     )
+                    kolom_id = kolom_cursor.lastrowid
+                    for keyword in keywords:
+                        conn.execute(
+                            _ADD_REGEL_KEYWORD_SQL,
+                            {"regel_kolom_id": kolom_id, "keyword": keyword, "user_id": user["id"]},
+                        )
                 conn.commit()
             except sqlite3.IntegrityError:
                 conn.rollback()
-                error = "Dit keyword bestaat al in deze kolom."
-
-        if error:
-            data = load_user_page_data(conn, user["id"])
+                error = "Dubbele waarde binnen een kolom — een keyword mag maar één keer per kolom voorkomen."
     finally:
         conn.close()
 
     if error:
-        log.warning(
-            "Failed to add keyword(s) to rule %s column %s for user %s: %s", regel_id, kolom_id, user["id"], error
-        )
+        log.warning("Failed to save rule %s for user %s: %s", regel_id, user["id"], error)
         return templates.TemplateResponse(
-            request, "user.html", {**data, "user": user, "error": error}, status_code=400
+            request, "regel_edit.html",
+            {"user": user, "regel": regel, "current": submitted, "regel_kolommen": REGEL_KOLOMMEN, "error": error},
+            status_code=400,
         )
-    audit.info("%d keyword(s) added to rule %s, column %s, by user %s", len(normalized), regel_id, kolom_id, user["id"])
-    return RedirectResponse(user_page_url(user["name"]), status_code=303)
-
-
-@router.post("/categories/regels/keywords/{keyword_id}/delete")
-def remove_regel_keyword(request: Request, keyword_id: int):
-    """Delete a single keyword. If it was the last one in its
-    column-condition, that now-empty condition is cleaned up too (and, if
-    that was the rule's last remaining condition, the rule itself) — see
-    sql/queries/reference_data/remove_empty_regel_kolommen.sql /
-    remove_empty_regels.sql."""
-    user = require_login(request)
-    if isinstance(user, RedirectResponse):
-        return user
-
-    conn = get_connection()
-    try:
-        conn.execute(_REMOVE_REGEL_KEYWORD_SQL, {"id": keyword_id, "user_id": user["id"]})
-        conn.execute(_REMOVE_EMPTY_REGEL_KOLOMMEN_SQL, {"user_id": user["id"]})
-        conn.execute(_REMOVE_EMPTY_REGELS_SQL, {"user_id": user["id"]})
-        conn.commit()
-    finally:
-        conn.close()
-    audit.info("Rule keyword %s removed by user %s", keyword_id, user["id"])
+    audit.info("Rule %s saved by user %s (%d column condition(s))", regel_id, user["id"], len(columns))
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
