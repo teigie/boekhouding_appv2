@@ -25,15 +25,24 @@
   <section class="card" style="margin-top: 1.5rem;">
     <h2>Hoe werkt categoriseren?</h2>
     <p class="muted">
-      Categorieën en hun keywords zijn persoonlijk — alleen jij ziet en
-      beheert deze lijst. Bij een upload wordt elke transactie automatisch
-      getest tegen al jouw keywords, op drie manieren:
+      Categorieën en hun regels zijn persoonlijk — alleen jij ziet en
+      beheert deze lijst. Een categorie bestaat uit één of meer
+      <strong>regels</strong>; een transactie krijgt die categorie zodra
+      minstens één van haar regels matcht.
     </p>
-    <ul class="muted">
-      <li><strong>Simpel</strong> — een keyword dat voorkomt in <em>Naam</em> (de tegenpartij), bijv. "Albert Heijn" → Levensmiddelen.</li>
-      <li><strong>Moeilijk</strong> — een keyword dat voorkomt in <em>Mededeling</em> (de vrije-tekst omschrijving), bijv. "abonnement fitness" → Sport. Optioneel te combineren met een keyword dat ook in Naam moet voorkomen — dan moeten beide matchen (bijv. "Vakantiegeld" in Mededeling én "vakantie" in Naam), voor gevallen waar geen van beide op zichzelf precies genoeg is.</li>
-      <li><strong>Interne overboeking</strong> — geen keyword nodig: een overboeking tussen twee van je eigen rekeningen wordt automatisch herkend, mits je een categorie met precies die naam hebt (zie de suggesties hieronder).</li>
-    </ul>
+    <p class="muted">
+      Een regel is zelf een set voorwaarden over kolommen als Naam,
+      Mededeling, Af/Bij, Bedrag, enzovoort. Een kolom die je leeg laat
+      wordt niet gecontroleerd. Vul je meerdere kolommen in, dan moeten
+      <strong>ze allemaal</strong> matchen (EN). Vul je meerdere keywords
+      in bij één kolom, dan kies je zelf: <strong>OF</strong> (één ervan
+      is genoeg) of <strong>EN</strong> (ze moeten allemaal voorkomen).
+    </p>
+    <p class="muted">
+      Voorbeeld — categorie "Inkomsten": een regel met Naam "Baan",
+      Af/Bij "Bij", Mutatiesoort "Mutatieoverschrijving" en Mededeling
+      "Salaris" matcht alleen als alle vier tegelijk kloppen.
+    </p>
     <p class="muted">
       Matcht precies één categorie, dan wordt die automatisch toegekend.
       Matcht er geen of meer dan één, dan vraagt <a href="/review">Controle</a>
@@ -82,64 +91,72 @@
         <div class="table-actions" style="justify-content: space-between;">
           <h2>{{ c["Name"] }}</h2>
           <form method="post" action="/categories/{{ c['ID'] }}/delete" class="inline-form">
-            <button type="submit" class="link-button">Verwijderen</button>
+            <button type="submit" class="link-button">Categorie verwijderen</button>
           </form>
         </div>
 
-        <div class="grid">
-          <div>
-            <h3>Simpele keywords (Naam)</h3>
-            {% if c.naam_keywords %}
-              <ul>
-                {% for k in c.naam_keywords %}
-                  <li>
-                    {{ k["keyword"] }}
-                    <form method="post" action="/categories/keywords/naam/{{ k['ID'] }}/delete" class="inline-form">
-                      <button type="submit" class="link-button">verwijderen</button>
+        {% if c.regels %}
+          {% for regel in c.regels %}
+            <div class="card" style="margin-top: 0.75rem; background: var(--bg);">
+              <div class="table-actions" style="justify-content: space-between;">
+                <strong>Regel {{ loop.index }}</strong>
+                <form method="post" action="/categories/regels/{{ regel.ID }}/delete" class="inline-form">
+                  <button type="submit" class="link-button">Regel verwijderen</button>
+                </form>
+              </div>
+              {% for kolom in regel.kolommen %}
+                <div style="margin-top: 0.5rem;">
+                  <span class="muted">{{ kolom.kolom }} ({{ "moet allemaal voorkomen" if kolom.combine_mode == "AND" else "één van deze" }}):</span>
+                  <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.35rem;">
+                    {% for kw in kolom.keywords %}
+                      <span class="chip">
+                        {{ kw.keyword }}
+                        <form method="post" action="/categories/regels/keywords/{{ kw.ID }}/delete" class="inline-form">
+                          <button type="submit" class="chip-remove" title="Verwijderen">×</button>
+                        </form>
+                      </span>
+                    {% endfor %}
+                    <form method="post" action="/categories/regels/{{ regel.ID }}/kolommen/{{ kolom.ID }}/keywords" class="inline-form">
+                      <input type="text" name="keywords" placeholder="+ keyword" style="display:inline-block; width:9rem; margin: 0;">
+                      <button type="submit" class="link-button">toevoegen</button>
                     </form>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <p class="muted">Nog geen keywords.</p>
-            {% endif %}
-            <form method="post" action="/categories/{{ c['ID'] }}/keywords/naam">
-              <label>Nieuw keyword<br><input type="text" name="keyword" required placeholder="bijv. Albert Heijn"></label>
-              <button type="submit">Toevoegen</button>
-            </form>
-          </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="muted" style="margin-top: 0.75rem;">Nog geen regels voor deze categorie.</p>
+        {% endif %}
 
-          <div>
-            <h3>Moeilijke keywords (Mededeling)</h3>
+        <details style="margin-top: 1rem;">
+          <summary>Nieuwe regel toevoegen</summary>
+          <form method="post" action="/categories/{{ c['ID'] }}/regels" style="margin-top: 0.75rem;">
             <p class="muted">
-              Optioneel te combineren met een Naam-keyword — dan moet
-              allebei matchen (bijv. "Vakantiegeld" in Mededeling én
-              "vakantie" in Naam).
+              Vul minstens één kolom in. Meerdere keywords: één per regel,
+              of gescheiden door een komma — behalve bij Bedrag en Saldo
+              na mutatie, waar een komma het decimaalteken is: daar telt
+              elke regel als één bedrag (bijv. "1.234,56" op de eerste
+              regel, "99,95" op de tweede).
             </p>
-            {% if c.mededeling_keywords %}
-              <ul>
-                {% for k in c.mededeling_keywords %}
-                  <li>
-                    {{ k["keyword"] }}
-                    {% if k["naam_keyword"] %}
-                      <span class="muted">(+ Naam: {{ k["naam_keyword"] }})</span>
-                    {% endif %}
-                    <form method="post" action="/categories/keywords/mededeling/{{ k['ID'] }}/delete" class="inline-form">
-                      <button type="submit" class="link-button">verwijderen</button>
-                    </form>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <p class="muted">Nog geen keywords.</p>
-            {% endif %}
-            <form method="post" action="/categories/{{ c['ID'] }}/keywords/mededeling">
-              <label>Nieuw keyword (Mededeling)<br><input type="text" name="keyword" required placeholder="bijv. Vakantiegeld"></label>
-              <label>Gekoppeld Naam-keyword (optioneel)<br><input type="text" name="naam_keyword" placeholder="bijv. vakantie"></label>
-              <button type="submit">Toevoegen</button>
-            </form>
-          </div>
-        </div>
+            <div class="grid">
+              {% for kolom in regel_kolommen %}
+                <div>
+                  <label>{{ kolom.label }}<br>
+                    <textarea name="{{ kolom.name }}_keywords" rows="2" placeholder="{{ kolom.placeholder }}"></textarea>
+                  </label>
+                  <label class="muted">Combineren met<br>
+                    <select name="{{ kolom.name }}_mode">
+                      <option value="OR">OF — matcht als één van de keywords voorkomt</option>
+                      <option value="AND">EN — moet allemaal voorkomen</option>
+                    </select>
+                  </label>
+                </div>
+              {% endfor %}
+            </div>
+            <button type="submit" style="margin-top: 1rem;">Regel toevoegen</button>
+          </form>
+        </details>
       </section>
     {% endfor %}
   {% endif %}

@@ -62,43 +62,72 @@ create table mutatiesoort_mapping (
 	foreign key (mutatiesoort_ID) references mutatiesoort(ID)
 );
 
--- "Simple" categorization: substrings of Naam (the counterparty/merchant
--- name) that auto-assign a category, e.g. "Lidl" -> Levensmiddelen.
--- Per-user like afschrift_categorien itself — cat_ID cascades on delete
--- so removing a category takes its keywords with it.
-create table afschrift_cat_keywords (
+-- Rule-based categorization: a category is matched by any number of
+-- independent "rules" (OR across a category's rules — one row per rule
+-- here, cat_ID cascades on delete so removing a category takes its rules
+-- with it). See sql/categorization/match_custom_rules.sql for the full
+-- matching semantics and docs/ARCHITECTURE.md for the model. Replaces the
+-- earlier separate "simple" (Naam) / "difficult" (Mededeling ± paired
+-- Naam) / "Interne overboeking" (Tegenrekening-resolves-to-own-account)
+-- mechanisms with one general one — a plain Tegenrekening rule against
+-- your own IBAN(s) covers what "Interne overboeking" used to do
+-- automatically, just explicit and user-owned like everything else here.
+create table afschrift_cat_regels (
 	ID integer primary key autoincrement,
-	keyword varchar(30) not null,
 	cat_ID integer not null,
 	user_ID integer not null,
 	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
-	foreign key (user_ID) references Users(ID),
-	unique (user_ID, keyword)
+	foreign key (user_ID) references Users(ID)
 );
 
--- "Difficult" categorization: substrings of Mededeling (the free-text
--- transaction description), checked in addition to afschrift_cat_keywords
--- when Naam alone isn't conclusive. Wider than a merchant name, so this
--- allows longer phrases/sentences, not just single words. Per-user, same
--- shape as afschrift_cat_keywords above.
+-- One row per column a rule places a condition on — a column simply
+-- absent from a rule's rows is never checked ("no value = no check").
+-- ALL of a rule's columns must match for the rule itself to match (AND
+-- across columns, hence the `unique (regel_ID, kolom)` — a rule can only
+-- have one condition per column, not two independent ones).
 --
--- naam_keyword is an OPTIONAL paired condition: when set, a match
--- requires BOTH `keyword` in Mededeling AND naam_keyword in Naam — e.g.
--- Mededeling keyword "Vakantiegeld" paired with Naam keyword "vakantie",
--- so the combination is precise even though neither substring alone
--- would be. When left NULL, behaves exactly like before: Mededeling
--- alone is enough. This is what extends "difficult" categorization with
--- the same substring-matching idea "simple" categorization already uses
--- for Naam, without requiring a second, separate simple keyword to exist.
-create table afschrift_cat_mededeling_keywords (
+-- combine_mode governs how that COLUMN's own keywords (below) combine:
+-- 'OR' matches if ANY of them match the row, 'AND' requires ALL of them
+-- to match simultaneously (only meaningful for substring columns where a
+-- field can contain more than one phrase at once, e.g. Mededeling
+-- containing both "Salaris" AND "maandelijks" — for a single-valued
+-- column like Af_bij, 'AND' with two different keywords can never match
+-- anything, which the app allows rather than blocks).
+--
+-- A column-group is expected to always have at least one keyword row
+-- (below) — the app deletes a now-empty group rather than leaving it
+-- dangling, so an absent row always means "not checked", never "checked
+-- against nothing".
+create table afschrift_cat_regel_kolommen (
 	ID integer primary key autoincrement,
-	keyword varchar(200) not null,
-	naam_keyword varchar(30),
-	cat_ID integer not null,
+	regel_ID integer not null,
+	kolom varchar(20) not null
+		check (kolom in ('Naam', 'Tegenrekening', 'Code', 'Af_bij', 'Bedrag_eur',
+		                  'Mutatiesoort', 'Mededeling', 'Saldo_na_mutatie', 'Tag')),
+	combine_mode varchar(3) not null check (combine_mode in ('AND', 'OR')),
 	user_ID integer not null,
-	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
+	foreign key (regel_ID) references afschrift_cat_regels(ID) on delete cascade,
 	foreign key (user_ID) references Users(ID),
-	unique (user_ID, keyword)
+	unique (regel_ID, kolom)
+);
+
+-- The actual keyword/value(s) for one rule's one column-condition.
+-- Matching depends on the column's type (see match_custom_rules.sql):
+-- LIKE substring for free-text columns (Naam, Tegenrekening, Mededeling,
+-- Tag, Mutatiesoort), exact text equality for Code/Af_bij, exact NUMERIC
+-- equality (via CAST, not text comparison) for Bedrag_eur/Saldo_na_mutatie
+-- — app/categorization_rules.py normalizes/validates a submitted value
+-- for its column before it's ever stored here (e.g. Dutch-formatted
+-- amounts like '1.234,56' are parsed into a canonical numeric string,
+-- Af_bij is restricted to exactly 'Af' or 'Bij').
+create table afschrift_cat_regel_keywords (
+	ID integer primary key autoincrement,
+	regel_kolom_ID integer not null,
+	keyword varchar(200) not null,
+	user_ID integer not null,
+	foreign key (regel_kolom_ID) references afschrift_cat_regel_kolommen(ID) on delete cascade,
+	foreign key (user_ID) references Users(ID),
+	unique (regel_kolom_ID, keyword)
 );
 
 -- ---------------------------------------------------------------------------
@@ -126,10 +155,9 @@ create table temp_afschrift2 (
 -- Stage 2: categorization output. Same shape as afschrift, plus `processed`.
 -- Rekening_ID/Mutatiesoort_ID are resolved independently of `processed` —
 -- they're always expected to map (see docs/ARCHITECTURE.md). `processed`
--- reflects only the category-keyword match outcome (Naam + Mededeling
--- combined, see sql/categorization/):
---   0 = no category keyword matched — needs a manual category
---   1 = exactly one category matched, eligible for migration
+-- reflects only the rule-match outcome (see sql/categorization/):
+--   0 = no rule matched — needs a manual category
+--   1 = exactly one category matched (by one or more of its rules), eligible for migration
 --   2 = ambiguous — more than one category matched, needs a manual pick
 create table temp_afschrift (
 	ID integer primary key autoincrement,

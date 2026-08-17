@@ -5,6 +5,79 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-17 — General rule-based categorization
+
+- Replaced the old three categorization mechanisms — "simple"
+  (`afschrift_cat_keywords`, Naam substrings), "difficult"
+  (`afschrift_cat_mededeling_keywords`, Mededeling substrings optionally
+  paired with a Naam substring), and "Interne overboeking"
+  (auto-detected Tegenrekening-resolves-to-own-account, no table) — with
+  one general, user-owned rule system. A category matches if any one of
+  its **rules** (`afschrift_cat_regels`) matches (OR across a category's
+  rules). A rule is a set of conditions over any of `Naam`,
+  `Tegenrekening`, `Code`, `Af_bij`, `Bedrag_eur`, `Mutatiesoort`,
+  `Mededeling`, `Saldo_na_mutatie`, `Tag`
+  (`afschrift_cat_regel_kolommen`) — a column absent from a rule is
+  simply not checked, all columns present must match (AND across a
+  rule's columns). Each column-condition carries one or more
+  keywords/values (`afschrift_cat_regel_keywords`) plus its own
+  AND/OR `combine_mode` for how those keywords combine with each other.
+  Matching is substring (`LIKE`) for free-text columns, exact text match
+  for `Code`/`Af_bij`, and exact NUMERIC match (`CAST(... AS REAL)`, not
+  text) for `Bedrag_eur`/`Saldo_na_mutatie` — new `app/categorization_rules.py`
+  validates/normalizes a submitted value for its column before storage,
+  including parsing Dutch-formatted amounts (`'.'` thousands, `','`
+  decimals, e.g. `'1.234,56'`) into that canonical numeric form, and
+  restricting `Af_bij` to exactly `'Af'`/`'Bij'`.
+- New `sql/categorization/match_custom_rules.sql` (standalone/documented)
+  and a matching rewrite of `categorize_batch.sql`'s embedded logic:
+  implemented as a correlated `GROUP BY`/`HAVING` per (rule, column) —
+  a column-group "fails" if fewer than 1 (OR mode) or fewer than all
+  (AND mode) of its keywords match, and a rule matches iff none of its
+  column-groups fail.
+- Profile page (`/user/{username}`): each category now shows its rules as
+  cards, each column rendered as a labeled group of removable keyword
+  chips (plus a small "+ keyword" form reusing that column's existing
+  combine_mode) and a "Regel verwijderen" button. A collapsible "Nieuwe
+  regel toevoegen" form lets a user set every column's keywords (one
+  per line, or comma-separated — except `Bedrag_eur`/`Saldo_na_mutatie`,
+  where a comma is the decimal separator, so there it's one amount per
+  line) and AND/OR mode in a single submission, creating the rule and
+  all its non-empty columns/keywords in one transaction. Deleting a
+  rule's last keyword in a column removes that now-empty column, and
+  removing a rule's last column removes the now-empty rule
+  (`remove_empty_regel_kolommen.sql`/`remove_empty_regels.sql`), so
+  "column absent = not checked" never has to distinguish an empty group
+  from a genuinely absent one.
+- New `scripts/migrate_to_rule_based_categorization.py`: converts every
+  existing Naam keyword into a 1-column rule, every Mededeling keyword
+  (with its optional paired Naam keyword) into a 1- or 2-column rule, and
+  — for any user with a category literally named "Interne overboeking"
+  and 2+ linked Rekeningen — a static Tegenrekening rule listing that
+  user's own IBANs (OR). This is a **static, one-time snapshot**, not the
+  old dynamic "resolves to any Rekening of mine" check: a Rekening linked
+  *after* running this migration isn't automatically covered, unlike
+  before — add its IBAN as another Tegenrekening keyword if wanted. Then
+  drops `afschrift_cat_keywords`/`afschrift_cat_mededeling_keywords`.
+  Already run against the real `data/boekhouding.db` (backed up first,
+  `PRAGMA foreign_key_check` clean): 15 Naam keywords → 15 rules, 1
+  Mededeling keyword → 1 rule, 1 static Tegenrekening rule created (the
+  other user's "Interne overboeking" category only had 1 linked Rekening,
+  so correctly skipped).
+- Verified on an isolated scratch copy of the migrated real data: every
+  auto-migrated rule reproduces its old categorization outcome exactly
+  (Naam/Mededeling/internal-transfer regression); a new multi-column AND
+  rule (the "Inkomsten" example: Naam + Af_bij + Mutatiesoort +
+  Mededeling all required) resolves a fully-matching row and correctly
+  leaves a partially-matching row (wrong Af_bij) unresolved; an exact
+  `Bedrag_eur` rule of `50` matches `50.0` but correctly does NOT
+  substring-match `150.0`; an AND-combined Mededeling column ("Salaris"
+  AND "maandelijks") only matches when both phrases are present. At the
+  HTTP layer: invalid Af_bij/unparseable-amount/empty-rule submissions
+  all render friendly Dutch errors inline on the profile page; adding a
+  keyword to an existing column, deleting a single keyword (with cascade
+  cleanup), and deleting a whole rule all behave correctly.
+
 ### 2026-08-17 — Profile page + real dashboard (Fase 5)
 
 - New per-user profile page at `/user/{username}` (`app/routes/user.py`,

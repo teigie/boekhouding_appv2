@@ -214,7 +214,8 @@ form label {
 }
 
 form input,
-form select {
+form select,
+form textarea {
   display: block;
   margin-top: 0.3rem;
   width: 100%;
@@ -225,6 +226,7 @@ form select {
   background: var(--bg);
   color: var(--text);
   font-size: 0.95rem;
+  font-family: inherit;
 }
 
 form button,
@@ -256,6 +258,26 @@ form button,
 
 .chip:hover {
   border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  margin-left: 0.35rem;
+  padding: 0;
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: #d64545;
+}
+
+summary {
+  cursor: pointer;
   color: var(--accent);
 }
 

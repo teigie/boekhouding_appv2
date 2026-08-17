@@ -1,23 +1,19 @@
 """Shared data-loading for the per-user profile page (Rekeningen +
-categorieën/keywords together, see app/routes/user.py). Used both by the
-page's own GET route and by accounts.py/categories.py's POST error paths,
-which re-render that same combined page on failure rather than a
-standalone one.
+categorieën/categorization rules together, see app/routes/user.py). Used
+both by the page's own GET route and by accounts.py/categories.py's POST
+error paths, which re-render that same combined page on failure rather
+than a standalone one.
 """
 import sqlite3
 from urllib.parse import quote
 
+from app.categorization_rules import REGEL_KOLOMMEN
 from app.config import SQL_DIR
 
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
-_LIST_NAAM_KEYWORDS_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "list_naam_keywords_for_user.sql"
-).read_text(encoding="utf-8")
-_LIST_MEDEDELING_KEYWORDS_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "list_mededeling_keywords_for_user.sql"
-).read_text(encoding="utf-8")
+_LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
 
 
 def user_page_url(username: str) -> str:
@@ -28,30 +24,48 @@ def user_page_url(username: str) -> str:
     return f"/user/{quote(username, safe='')}"
 
 
+def _group_regels_by_category(rows) -> dict:
+    """The flat (regel, kolom, keyword) rows from list_for_user.sql,
+    nested into cat_ID -> [ {"ID": regel_ID, "kolommen": [
+    {"ID", "kolom", "combine_mode", "keywords": [{"ID", "keyword"}, ...]}
+    , ...]} , ...]. Dict insertion order (Python 3.7+) keeps the original
+    regel_ID/kolom_ID/keyword_ID ordering from the query intact."""
+    regels_by_cat: dict = {}
+    for row in rows:
+        regels = regels_by_cat.setdefault(row["cat_ID"], {})
+        regel = regels.setdefault(row["regel_ID"], {"ID": row["regel_ID"], "kolommen": {}})
+        kolom = regel["kolommen"].setdefault(
+            row["kolom_ID"],
+            {"ID": row["kolom_ID"], "kolom": row["kolom"], "combine_mode": row["combine_mode"], "keywords": []},
+        )
+        kolom["keywords"].append({"ID": row["keyword_ID"], "keyword": row["keyword"]})
+
+    return {
+        cat_id: [{"ID": r["ID"], "kolommen": list(r["kolommen"].values())} for r in regels.values()]
+        for cat_id, regels in regels_by_cat.items()
+    }
+
+
 def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
-    """Rekeningen, plus categories with their keywords grouped underneath,
-    plus the suggestion chips still worth offering (names the user
-    doesn't already have, case-insensitively)."""
+    """Rekeningen, plus categories with their categorization rules nested
+    underneath, plus the suggestion chips still worth offering (names the
+    user doesn't already have, case-insensitively)."""
     rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user_id}).fetchall()
     categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user_id}).fetchall()
-    naam_keywords = conn.execute(_LIST_NAAM_KEYWORDS_SQL, {"user_id": user_id}).fetchall()
-    mededeling_keywords = conn.execute(_LIST_MEDEDELING_KEYWORDS_SQL, {"user_id": user_id}).fetchall()
     suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
+    regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
+    regels_by_cat = _group_regels_by_category(regel_rows)
 
-    by_id = {
-        c["ID"]: {"ID": c["ID"], "Name": c["Name"], "naam_keywords": [], "mededeling_keywords": []}
-        for c in categorieen
-    }
-    for k in naam_keywords:
-        by_id[k["cat_ID"]]["naam_keywords"].append(k)
-    for k in mededeling_keywords:
-        by_id[k["cat_ID"]]["mededeling_keywords"].append(k)
+    categorieen_out = [
+        {"ID": c["ID"], "Name": c["Name"], "regels": regels_by_cat.get(c["ID"], [])} for c in categorieen
+    ]
 
     owned_names = {c["Name"].casefold() for c in categorieen}
     suggesties = [s for s in suggesties if s["Name"].casefold() not in owned_names]
 
     return {
         "rekeningen": rekeningen,
-        "categorieen": list(by_id.values()),
+        "categorieen": categorieen_out,
         "suggesties": suggesties,
+        "regel_kolommen": REGEL_KOLOMMEN,
     }

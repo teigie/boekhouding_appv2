@@ -43,17 +43,16 @@ rekening koppelen; dat gebeurt op de profielpagina
 (`/user/{username}`, zie hieronder), via `POST /accounts`
 (`app/routes/accounts.py`).
 
-Uitgavencategorieën (`afschrift_categorien`) en hun keywords
-(`afschrift_cat_keywords`/`afschrift_cat_mededeling_keywords`) zijn op
-dezelfde manier per gebruiker: elke gebruiker bouwt en beheert zijn eigen
-lijst, ook op de profielpagina, via `POST /categories/...`
-(`app/routes/categories.py`), volledig los van wat andere gebruikers
-hebben. Een nieuwe gebruiker start met een lege lijst; de 14 namen die
-vroeger de vaste globale set waren (Auto, Wonen, Interne overboeking, …)
-staan nog wel klaar als eenmalig aan te klikken suggesties, in de
-losstaande, niet-gebruikersgebonden tabel `afschrift_categorie_suggesties`
-(gevuld door `sql/seed_data.sql`) — puur een hulplijstje voor de UI, nooit
-gebruikt bij het categoriseren zelf.
+Uitgavencategorieën (`afschrift_categorien`) en hun categoriseringsregels
+(`afschrift_cat_regels`, zie "Fase 2" hieronder) zijn op dezelfde manier
+per gebruiker: elke gebruiker bouwt en beheert zijn eigen lijst, ook op de
+profielpagina, via `POST /categories/...` (`app/routes/categories.py`),
+volledig los van wat andere gebruikers hebben. Een nieuwe gebruiker start
+met een lege lijst; de 14 namen die vroeger de vaste globale set waren
+(Auto, Wonen, Interne overboeking, …) staan nog wel klaar als eenmalig aan
+te klikken suggesties, in de losstaande, niet-gebruikersgebonden tabel
+`afschrift_categorie_suggesties` (gevuld door `sql/seed_data.sql`) — puur
+een hulplijstje voor de UI, nooit gebruikt bij het categoriseren zelf.
 
 ### De profielpagina (`/user/{username}`)
 
@@ -236,47 +235,67 @@ SQL herleidt de foreign keys van elke rij:
   structurele referentiedata; wordt verondersteld altijd te matchen.
 
 Beide gebeuren onafhankelijk van `processed` — dat gaat uitsluitend over de
-categorie-match, uit drie onafhankelijke signalen, elk gescopet op de
-`user_ID` van de categoriserende gebruiker (categorieën en keywords zijn
-per gebruiker, zie "Identiteit & rekeningen" hierboven):
+categorie-match, via het **regel-systeem** hieronder, gescopet op de
+`user_ID` van de categoriserende gebruiker (categorieën en regels zijn
+per gebruiker, zie "Identiteit & rekeningen" hierboven).
 
-- **Simpele categorisering** — `Naam` (de tegenpartij-/bedrijfsnaam)
-  doorzocht op elke `afschrift_cat_keywords.keyword`-substring van de
-  gebruiker zelf (bijv. "Lidl" → Levensmiddelen).
-- **Moeilijke categorisering** — `Mededeling` (de vrije-tekst
-  transactieomschrijving) doorzocht op elke
-  `afschrift_cat_mededeling_keywords.keyword`-substring/frase van de
-  gebruiker zelf, voor gevallen waar `Naam` alleen niet genoeg zegt. Elke
-  rij kan optioneel gekoppeld worden aan een `naam_keyword` dat dan ook in
-  `Naam` moet voorkomen wil de rij matchen (bijv. Mededeling
-  "Vakantiegeld" gekoppeld aan Naam "vakantie" — samen precies genoeg,
-  terwijl geen van beide op zichzelf dat zou zijn). Zonder koppeling
-  (`NULL`) is Mededeling alleen voldoende, zoals voorheen.
-- **Interne overboeking** — structureel anders dan de andere twee, geen
-  keyword-match: `Tegenrekening` die zelf een `Rekening` is die aan
-  dezelfde gebruiker gekoppeld is, wordt automatisch de categorie "Interne
-  overboeking" (`sql/categorization/match_internal_transfer.sql`). Steunt
-  op het bestaan van precies die categorienaam *voor die gebruiker* — er
-  is geen apart schemaveld dat een categorie als "de interne-
-  overboeking-categorie" markeert. Een nieuwe gebruiker heeft die
-  categorie nog niet (iedereen start leeg), dus dit signaal matcht simpelweg
-  niets totdat de gebruiker hem zelf toevoegt (staat klaar als suggestie
-  op de profielpagina, `/user/{username}`).
+#### Het regel-systeem
 
-Huidige strategie (nog niet definitief, kan nog wijzigen): alle drie
-signalen worden voor elke rij altijd gecontroleerd, en de gematchte
-categorieën uit alle bronnen worden samengevoegd tot één verzameling per
-rij:
+Een categorie matcht een rij zodra minstens één van haar **regels**
+(`afschrift_cat_regels`) matcht (OF over de regels van een categorie). Een
+regel is zelf een set voorwaarden over kolommen — `Naam`, `Tegenrekening`,
+`Code`, `Af_bij`, `Bedrag_eur`, `Mutatiesoort`, `Mededeling`,
+`Saldo_na_mutatie`, `Tag` (`afschrift_cat_regel_kolommen`, één rij per
+kolom die de regel controleert). Een kolom die een regel niet heeft wordt
+simpelweg niet gecontroleerd ("geen waarde = geen check"). Alle kolommen
+die een regel wél heeft moeten matchen wil de regel zelf matchen (EN over
+de kolommen van een regel).
+
+Elke kolom-voorwaarde heeft één of meer keywords/waarden
+(`afschrift_cat_regel_keywords`) plus een eigen `combine_mode`: `'OR'`
+matcht als één van de keywords voorkomt, `'AND'` vereist dat ze allemaal
+tegelijk voorkomen. Bijv. categorie "Inkomsten" met één regel — Naam
+"Baan", Af/Bij "Bij", Mutatiesoort "Mutatieoverschrijving", Mededeling
+"Salaris" — matcht alleen als alle vier tegelijk kloppen.
+
+Matching hangt af van het kolomtype:
+
+- **Naam, Tegenrekening, Mededeling, Tag, Mutatiesoort** — substring
+  (`LIKE`), zelfde idee als de oude "simpele"/"moeilijke" keywords.
+- **Code, Af_bij** — exacte tekstmatch. Af_bij wordt op app-niveau
+  beperkt tot precies `'Af'`/`'Bij'` (`app/categorization_rules.py`).
+- **Bedrag_eur, Saldo_na_mutatie** — exacte match als GETAL (`CAST(...
+  AS REAL)`), niet als tekst — `'25'` en `'25.00'` zijn dezelfde waarde.
+  Invoer is Nederlands genoteerd (`'.'` duizendtallen, `','` decimalen,
+  bijv. `'1.234,56'`) en wordt vóór opslag omgezet naar deze canonieke
+  vorm.
+
+Er waren ooit drie losse signalen — "simpel" (Naam-substrings),
+"moeilijk" (Mededeling-substrings, optioneel gekoppeld aan een
+Naam-substring) en "Interne overboeking" (Tegenrekening die zelf een
+`Rekening` van dezelfde gebruiker is, automatisch herkend, geen keyword).
+Alle drie zijn nu uit te drukken als regels onder het ene algemene
+mechanisme hierboven: een Naam-only regel, een Mededeling+Naam-regel
+(twee kolommen, allebei verplicht — de EN-over-kolommen default), en een
+Tegenrekening-regel met je eigen rekeningnummer(s) als keywords. Er is
+geen aparte interne-overboeking-detectie meer — het is nu gewoon een
+normale, door de gebruiker beheerde regel, die zich dus ook niet meer
+automatisch aanpast zodra je een nieuwe rekening koppelt; voeg het IBAN
+dan zelf toe als extra Tegenrekening-keyword.
+
+`processed`:
 
 | Waarde | Betekenis |
 |---|---|
-| `0` | Geen van de drie signalen kwam overeen. Vereist handmatige categorie-keuze. |
-| `1` | Precies één categorie kwam overeen. Klaar voor migratie. |
+| `0` | Geen enkele regel kwam overeen. Vereist handmatige categorie-keuze. |
+| `1` | Precies één categorie kwam overeen (via één of meer van haar regels). Klaar voor migratie. |
 | `2` | Ambigu — meer dan één categorie kwam overeen. Vereist een handmatige keuze daartussen. |
 
 Draait automatisch, meteen na een geaccepteerde upload (zie fase 1) — er
 is geen aparte trigger of UI-stap voor. Zie `sql/categorization/README.md`
-voor de SQL-bestanden en `app/categorization.py` voor de orchestratie.
+voor de SQL-bestanden en `app/categorization.py` voor de orchestratie, en
+`app/categorization_rules.py` voor de validatie/normalisatie van een
+regel's ingevoerde waarden vóór opslag.
 
 ### Fase 3 — handmatige controle
 
