@@ -5,6 +5,52 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-17 — Profile page + real dashboard (Fase 5)
+
+- New per-user profile page at `/user/{username}` (`app/routes/user.py`,
+  `app/user_page.py`, template `user.html`), replacing the separate
+  `/accounts` and `/categories` pages: Rekeningen-beheer and
+  categorieën/keywords-beheer now live together on one page. The write
+  routes themselves didn't move (`POST /accounts` in
+  `app/routes/accounts.py`, `POST /categories/...` in
+  `app/routes/categories.py`) — they now redirect to (and, on error,
+  re-render) the profile page instead of their old standalone GET pages,
+  via the shared `app/user_page.py::load_user_page_data`/`user_page_url`.
+  `{username}` in the URL is cosmetic, not an auth boundary (`Users.Name`
+  has no uniqueness constraint) — the page always shows the logged-in
+  session's own data and redirects to the canonical URL if the path
+  doesn't match it. Names are percent-encoded when building the URL/nav
+  link so spaces or special characters in a freely-typed username don't
+  break it.
+- Deleted `app/templates/accounts.html` and `app/templates/categories.html`
+  (merged into `user.html`); `base.html`'s nav no longer lists
+  "Rekeningen"/"Categorieën" separately — the user's own name in the top
+  bar is now a link to their profile page.
+- Turned the dashboard (`/`, `app/routes/dashboard.py`) into an actual
+  financial report instead of a static placeholder: filterable by date
+  range (`?start=...&end=...`, ISO dates), defaulting to the current
+  calendar month when no (or an invalid) range is given. Shows headline
+  totals — total income, total expenditure, and the difference — plus a
+  per-category income/expenditure breakdown table, for the selected
+  range. Reads only the permanent `afschrift` ledger, never
+  `temp_afschrift` — rows not yet migrated (Fase 4) don't count. New
+  `sql/queries/afschrift/totals_per_category_for_user.sql` does the
+  per-category sums in one query, scoped to the user's own Rekeningen;
+  the page's headline totals are just that query's rows summed in
+  Python, not a second query. Added quick-range preset chips (deze
+  maand, vorige maand, dit jaar, alles).
+- Verified against an isolated copy of the dev database seeded with real
+  migrated `afschrift` rows (from testing Fase 4): default "deze maand"
+  totals and the per-category breakdown matched a hand-computed sum of
+  the underlying rows exactly; an empty date range showed the
+  "geen gegevens"-message instead of an empty table; a reversed
+  start/end range was silently normalized rather than erroring; the
+  profile page correctly redirected `/user/WrongName` to the logged-in
+  user's own canonical URL; adding a duplicate account/category
+  correctly re-rendered the profile page (not a standalone error page)
+  with the existing Rekeningen/categorieën still visible alongside the
+  error.
+
 ### 2026-08-17 — Fase 4: migrate resolved rows into `afschrift`
 
 - Implemented the `temp_afschrift` → `afschrift` migration step (Fase 4,

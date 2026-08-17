@@ -1,8 +1,11 @@
-"""Categories screen: view/add/delete the current user's own spending
-categories, and manage their "simple" (Naam) and "difficult" (Mededeling)
-keywords. Categories and keywords are per-user (see docs/ARCHITECTURE.md) —
-every route here re-verifies ownership of any ID coming from a URL/form
-before acting on it, the same way app/routes/review.py does for Rekening.
+"""Categories: add/delete the current user's own spending categories, and
+manage their "simple" (Naam) and "difficult" (Mededeling) keywords. The
+combined view (GET) lives on the profile page, app/routes/user.py — this
+module only owns the write paths (POST), redirecting back to that page on
+success and re-rendering it inline with an error on failure. Categories
+and keywords are per-user (see docs/ARCHITECTURE.md) — every route here
+re-verifies ownership of any ID coming from a URL/form before acting on
+it, the same way app/routes/review.py does for Rekening.
 """
 import sqlite3
 
@@ -14,18 +17,17 @@ from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
 from app.session import require_login
 from app.templating import templates
+from app.user_page import load_user_page_data, user_page_url
 
 log = get_app_logger()
 audit = get_audit_logger()
 
 router = APIRouter()
 
-_LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _FIND_CATEGORY_BY_NAME_SQL = (SQL_DIR / "queries" / "categorieen" / "find_by_name.sql").read_text(encoding="utf-8")
 _FIND_CATEGORY_FOR_USER_SQL = (
     SQL_DIR / "queries" / "categorieen" / "find_by_id_for_user.sql"
 ).read_text(encoding="utf-8")
-_LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _COUNT_USAGE_SQL = (SQL_DIR / "queries" / "categorieen" / "count_usage_for_user.sql").read_text(encoding="utf-8")
 
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
@@ -40,47 +42,6 @@ _REMOVE_NAAM_KEYWORD_SQL = (
 _REMOVE_MEDEDELING_KEYWORD_SQL = (
     SQL_DIR / "queries" / "reference_data" / "remove_mededeling_keyword.sql"
 ).read_text(encoding="utf-8")
-_LIST_NAAM_KEYWORDS_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "list_naam_keywords_for_user.sql"
-).read_text(encoding="utf-8")
-_LIST_MEDEDELING_KEYWORDS_SQL = (
-    SQL_DIR / "queries" / "reference_data" / "list_mededeling_keywords_for_user.sql"
-).read_text(encoding="utf-8")
-
-
-def _load_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
-    """Categories with their keywords grouped underneath, plus the
-    suggestion chips still worth offering (names the user doesn't already
-    have, case-insensitively)."""
-    categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user_id}).fetchall()
-    naam_keywords = conn.execute(_LIST_NAAM_KEYWORDS_SQL, {"user_id": user_id}).fetchall()
-    mededeling_keywords = conn.execute(_LIST_MEDEDELING_KEYWORDS_SQL, {"user_id": user_id}).fetchall()
-    suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
-
-    by_id = {c["ID"]: {"ID": c["ID"], "Name": c["Name"], "naam_keywords": [], "mededeling_keywords": []} for c in categorieen}
-    for k in naam_keywords:
-        by_id[k["cat_ID"]]["naam_keywords"].append(k)
-    for k in mededeling_keywords:
-        by_id[k["cat_ID"]]["mededeling_keywords"].append(k)
-
-    owned_names = {c["Name"].casefold() for c in categorieen}
-    suggesties = [s for s in suggesties if s["Name"].casefold() not in owned_names]
-
-    return {"categorieen": list(by_id.values()), "suggesties": suggesties}
-
-
-@router.get("/categories")
-def categories_page(request: Request):
-    user = require_login(request)
-    if isinstance(user, RedirectResponse):
-        return user
-
-    conn = get_connection()
-    try:
-        data = _load_page_data(conn, user["id"])
-    finally:
-        conn.close()
-    return templates.TemplateResponse(request, "categories.html", {**data, "user": user})
 
 
 @router.post("/categories")
@@ -108,17 +69,17 @@ def add_category(request: Request, name: str = Form(...)):
                     error = f"Categorie '{name}' bestaat al."
 
         if error:
-            data = _load_page_data(conn, user["id"])
+            data = load_user_page_data(conn, user["id"])
     finally:
         conn.close()
 
     if error:
         log.warning("Failed to add category for user %s: %s", user["id"], error)
         return templates.TemplateResponse(
-            request, "categories.html", {**data, "user": user, "error": error}, status_code=400
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
     audit.info("Category '%s' added by user %s", name, user["id"])
-    return RedirectResponse("/categories", status_code=303)
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
 @router.post("/categories/{cat_id}/delete")
@@ -131,7 +92,7 @@ def delete_category(request: Request, cat_id: int):
     try:
         category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
         if category is None:
-            return RedirectResponse("/categories", status_code=303)
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
         usage = conn.execute(_COUNT_USAGE_SQL, {"cat_id": cat_id, "user_id": user["id"]}).fetchone()
         error = None
@@ -149,17 +110,17 @@ def delete_category(request: Request, cat_id: int):
                 error = f"Categorie '{category['Name']}' is nog in gebruik en kan niet verwijderd worden."
 
         if error:
-            data = _load_page_data(conn, user["id"])
+            data = load_user_page_data(conn, user["id"])
     finally:
         conn.close()
 
     if error:
         log.warning("Failed to delete category %s for user %s: %s", cat_id, user["id"], error)
         return templates.TemplateResponse(
-            request, "categories.html", {**data, "user": user, "error": error}, status_code=400
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
     audit.info("Category '%s' (%s) deleted by user %s", category["Name"], cat_id, user["id"])
-    return RedirectResponse("/categories", status_code=303)
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
 def _add_keyword(request: Request, cat_id: int, keyword: str, kind: str, naam_keyword: str = ""):
@@ -182,7 +143,7 @@ def _add_keyword(request: Request, cat_id: int, keyword: str, kind: str, naam_ke
     try:
         category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
         if category is None:
-            return RedirectResponse("/categories", status_code=303)
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
         error = None
         if not keyword:
@@ -199,20 +160,20 @@ def _add_keyword(request: Request, cat_id: int, keyword: str, kind: str, naam_ke
                 error = f"Keyword '{keyword}' bestaat al."
 
         if error:
-            data = _load_page_data(conn, user["id"])
+            data = load_user_page_data(conn, user["id"])
     finally:
         conn.close()
 
     if error:
         log.warning("Failed to add %s keyword for user %s: %s", kind, user["id"], error)
         return templates.TemplateResponse(
-            request, "categories.html", {**data, "user": user, "error": error}, status_code=400
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
     audit.info(
         "%s keyword '%s' (naam_keyword=%r) added to category %s by user %s",
         kind, keyword, naam_keyword, cat_id, user["id"],
     )
-    return RedirectResponse("/categories", status_code=303)
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
 @router.post("/categories/{cat_id}/keywords/naam")
@@ -238,7 +199,7 @@ def _remove_keyword(request: Request, keyword_id: int, kind: str):
     finally:
         conn.close()
     audit.info("%s keyword %s removed by user %s", kind, keyword_id, user["id"])
-    return RedirectResponse("/categories", status_code=303)
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
 @router.post("/categories/keywords/naam/{keyword_id}/delete")

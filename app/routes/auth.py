@@ -47,9 +47,9 @@ def login_submit(request: Request, user_id: int = Form(...)):
                 status_code=400,
             )
         # Capture the OLD value before overwriting it — that's "when you
-        # logged in last time", which is what gets shown on /accounts.
-        # last_logged_in itself always holds the most recent login (see
-        # docs/ARCHITECTURE.md).
+        # logged in last time", which is what gets shown on the profile
+        # page (/user/{username}). last_logged_in itself always holds the
+        # most recent login (see docs/ARCHITECTURE.md).
         previous_login = user["last_logged_in"]
         conn.execute(_TOUCH_LAST_LOGGED_IN_SQL, {"user_id": user_id})
         conn.commit()

@@ -39,19 +39,43 @@ beveiligingsgrenzen.
 
 Een `Rekening.name` (de IBAN) is `UNIQUE` in de hele database — hij kan
 systeembreed maar bij één gebruiker horen. Gebruikers kunnen meer dan één
-rekening koppelen op `/accounts` (`app/routes/accounts.py`); een rekening
-kan maar bij één gebruiker horen.
+rekening koppelen; dat gebeurt op de profielpagina
+(`/user/{username}`, zie hieronder), via `POST /accounts`
+(`app/routes/accounts.py`).
 
 Uitgavencategorieën (`afschrift_categorien`) en hun keywords
 (`afschrift_cat_keywords`/`afschrift_cat_mededeling_keywords`) zijn op
 dezelfde manier per gebruiker: elke gebruiker bouwt en beheert zijn eigen
-lijst op `/categories` (`app/routes/categories.py`), volledig los van wat
-andere gebruikers hebben. Een nieuwe gebruiker start met een lege lijst;
-de 14 namen die vroeger de vaste globale set waren (Auto, Wonen, Interne
-overboeking, …) staan nog wel klaar als eenmalig aan te klikken
-suggesties, in de losstaande, niet-gebruikersgebonden tabel
-`afschrift_categorie_suggesties` (gevuld door `sql/seed_data.sql`) — puur
-een hulplijstje voor de UI, nooit gebruikt bij het categoriseren zelf.
+lijst, ook op de profielpagina, via `POST /categories/...`
+(`app/routes/categories.py`), volledig los van wat andere gebruikers
+hebben. Een nieuwe gebruiker start met een lege lijst; de 14 namen die
+vroeger de vaste globale set waren (Auto, Wonen, Interne overboeking, …)
+staan nog wel klaar als eenmalig aan te klikken suggesties, in de
+losstaande, niet-gebruikersgebonden tabel `afschrift_categorie_suggesties`
+(gevuld door `sql/seed_data.sql`) — puur een hulplijstje voor de UI, nooit
+gebruikt bij het categoriseren zelf.
+
+### De profielpagina (`/user/{username}`)
+
+Rekeningen-beheer en categorieën/keywords-beheer stonden ooit op twee
+losse pagina's (`/accounts`, `/categories`); die zijn samengevoegd tot één
+profielpagina op `/user/{username}` (`app/routes/user.py`,
+`app/user_page.py::load_user_page_data`, template `user.html`). De
+schrijfacties zelf zijn niet verhuisd — `POST /accounts` en
+`POST /categories/...` blijven in hun eigen routebestanden, ze redirecten
+alleen niet meer naar hun eigen GET-pagina maar naar de profielpagina
+(`app/user_page.py::user_page_url`), en renderen bij een fout ook
+`user.html` in plaats van een losstaand template.
+
+`{username}` in het pad is **cosmetisch, geen autorisatiegrens**:
+`Users.Name` heeft geen `UNIQUE`-constraint (dit is een persoonlijke, geen
+multi-tenant, app — zie hierboven) en de pagina toont altijd de data van
+de ingelogde sessie zelf, ongeacht wat er in het pad staat. Komt het pad
+niet overeen met `request.session["user_name"]`, dan redirect de route
+naar de eigen canonieke URL in plaats van iemands data onder een
+misleidend pad te tonen. De naam wordt percent-encoded
+(`user_page_url`/Jinja's `urlencode`-filter) zodat een vrij getypte naam
+met spaties of andere tekens de URL niet breekt.
 
 ## Waarom SQL-first
 
@@ -237,7 +261,7 @@ per gebruiker, zie "Identiteit & rekeningen" hierboven):
   overboeking-categorie" markeert. Een nieuwe gebruiker heeft die
   categorie nog niet (iedereen start leeg), dus dit signaal matcht simpelweg
   niets totdat de gebruiker hem zelf toevoegt (staat klaar als suggestie
-  op `/categories`).
+  op de profielpagina, `/user/{username}`).
 
 Huidige strategie (nog niet definitief, kan nog wijzigen): alle drie
 signalen worden voor elke rij altijd gecontroleerd, en de gematchte
@@ -324,11 +348,27 @@ niet op wat de pagina op dat moment toont — de "is deze rekening
 klaar?"-conditie wordt in de database zelf herbevestigd door
 `migrate_account`, niet aangenomen vanuit de eerder gerenderde pagina.
 
-### Fase 5 — het grootboek (`afschrift`)
+### Fase 5 — het grootboek (`afschrift`) en het dashboard
 
-Het permanente, volledig opgeloste overzicht. Gebruikt om uitgaven te
-bekijken, sorteren, filteren en (later) te aggregeren per categorie/
-rekening/periode.
+Het permanente, volledig opgeloste overzicht. Het dashboard (`/`,
+`app/routes/dashboard.py`) is de eerste viewer erop: een filterbaar
+rapport, niet meer de vroegere plek voor Rekeningen/categorieën-beheer
+(dat is verhuisd naar de profielpagina, zie hierboven). Leest uitsluitend
+`afschrift`, nooit `temp_afschrift` — nog niet gemigreerde rijen tellen
+niet mee in de cijfers.
+
+Filterbaar op periode (`?start=...&end=...`, ISO-datums), met de huidige
+kalendermaand als standaard wanneer geen (of een ongeldige) periode is
+opgegeven, plus een paar snelkeuzes (deze/vorige maand, dit jaar, alles —
+"alles" is intern gewoon een zeer brede datumrange, geen aparte
+NULL-behandeling). Één query
+(`sql/queries/afschrift/totals_per_category_for_user.sql`) sommeert
+inkomsten (`Af_bij = 'Bij'`) en uitgaven (`Af_bij = 'Af'`) per categorie
+voor de opgegeven periode, gescopet op de rekeningen van de ingelogde
+gebruiker; de paginatotalen (inkomsten/uitgaven/verschil bovenaan) zijn
+simpelweg de som van diezelfde rijen in Python — geen aparte totaalquery.
+Filteren op rekening, of aggregeren per rekening/langere periode dan een
+jaar, is nog niet gebouwd.
 
 ## Logging
 
@@ -359,4 +399,5 @@ aanpassingen:
   globale, niet-gebruikersgebonden lijst met categorie-suggesties
   (`afschrift_categorie_suggesties`). Echte categorieën en hun keywords
   (bijv. "Esso" → Auto) zijn persoonlijk per gebruiker en worden opgebouwd
-  via `/categories` (`app/routes/categories.py`), niet via seed-data.
+  via de profielpagina (`/user/{username}`, `app/routes/categories.py`),
+  niet via seed-data.

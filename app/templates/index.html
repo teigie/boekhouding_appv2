@@ -1,37 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Boekhouding — Dashboard{% endblock %}
 {% block content %}
-  <h1>Systeem actief</h1>
+  <h1>Dashboard</h1>
   <p class="muted">
-    Database verbonden. Upload-, controle- en migratieschermen komen hier
-    in latere stappen — zie <code>docs/ARCHITECTURE.md</code> voor het plan.
+    Overzicht van je permanente grootboek (<code>afschrift</code>) voor de
+    gekozen periode — nog niet gemigreerde rijen (zie
+    <a href="/review">Controle</a>) tellen hier niet mee.
   </p>
 
-  <div class="grid">
-    <section class="card">
-      <h2>Rekeningen</h2>
-      {% if rekeningen %}
-        <ul>
-          {% for r in rekeningen %}
-            <li>{{ r["name"] }}</li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="muted">Nog geen rekeningen — koppel er een op de <a href="/accounts">Rekeningen</a>-pagina.</p>
-      {% endif %}
-    </section>
+  <section class="card">
+    <form method="get" action="/" class="table-actions" style="flex-wrap: wrap;">
+      <label>Van<br><input type="date" name="start" value="{{ start }}"></label>
+      <label>Tot en met<br><input type="date" name="end" value="{{ end }}"></label>
+      <button type="submit">Filteren</button>
+    </form>
+    <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.75rem;">
+      {% for p in presets %}
+        <a href="/?start={{ p.start }}&end={{ p.end }}" class="chip">{{ p.label }}</a>
+      {% endfor %}
+    </div>
+  </section>
 
+  <div class="grid" style="margin-top: 1.5rem;">
     <section class="card">
-      <h2>Categorieën</h2>
-      {% if categorieen %}
-        <ul>
-          {% for c in categorieen %}
-            <li>{{ c["Name"] }}</li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="muted">Nog geen categorieën — beheer ze op de <a href="/categories">Categorieën</a>-pagina.</p>
-      {% endif %}
+      <h2>Inkomsten</h2>
+      <p class="amount-bij" style="font-size: 1.5rem; margin: 0;">+ € {{ "%.2f"|format(totaal_inkomsten) }}</p>
+    </section>
+    <section class="card">
+      <h2>Uitgaven</h2>
+      <p class="amount-af" style="font-size: 1.5rem; margin: 0;">− € {{ "%.2f"|format(totaal_uitgaven) }}</p>
+    </section>
+    <section class="card">
+      <h2>Saldo (verschil)</h2>
+      <p class="{{ 'amount-bij' if verschil >= 0 else 'amount-af' }}" style="font-size: 1.5rem; margin: 0;">
+        {{ "+" if verschil >= 0 else "−" }} € {{ "%.2f"|format(verschil|abs) }}
+      </p>
     </section>
   </div>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Per categorie</h2>
+    {% if categorieen %}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Categorie</th>
+              <th class="col-amount">Inkomsten</th>
+              <th class="col-amount">Uitgaven</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in categorieen %}
+              <tr>
+                <td>{{ c["category"] }}</td>
+                <td class="col-amount amount-bij">€ {{ "%.2f"|format(c["totaal_bij"]) }}</td>
+                <td class="col-amount amount-af">€ {{ "%.2f"|format(c["totaal_af"]) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">Geen gegevens in deze periode.</p>
+    {% endif %}
+  </section>
 {% endblock %}

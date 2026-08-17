@@ -1,10 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Boekhouding — Categorieën{% endblock %}
+{% block title %}Boekhouding — {{ user["name"] }}{% endblock %}
 {% block content %}
-  <h1>Jouw categorieën</h1>
+  <h1>{{ user["name"] }}</h1>
+  <p class="muted">Laatste keer ingelogd: {{ user["previous_login"] | eu_datetime }}</p>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   <section class="card">
+    <h2>Rekeningen</h2>
+    {% if rekeningen %}
+      <ul>
+        {% for r in rekeningen %}
+          <li>{{ r["name"] }} <span class="muted">(toegevoegd op {{ r["creation_date"] | eu_datetime }})</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nog geen rekeningen gekoppeld — koppel er hieronder een voordat je hiervoor een afschrift uploadt.</p>
+    {% endif %}
+    <form method="post" action="/accounts" style="margin-top: 1rem;">
+      <label>Rekening (IBAN)<br><input type="text" name="rekening" required placeholder="NL01TEST0000000001"></label>
+      <button type="submit">Rekening koppelen</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
     <h2>Hoe werkt categoriseren?</h2>
     <p class="muted">
       Categorieën en hun keywords zijn persoonlijk — alleen jij ziet en
@@ -24,7 +42,7 @@
   </section>
 
   {% if categorieen %}
-    <section class="card">
+    <section class="card" style="margin-top: 1.5rem;">
       <h2>Inhoudsopgave</h2>
       <div class="table-actions" style="flex-wrap: wrap;">
         {% for c in categorieen %}
@@ -34,7 +52,7 @@
     </section>
   {% endif %}
 
-  <section class="card">
+  <section class="card" style="margin-top: 1.5rem;">
     <h2>Nieuwe categorie</h2>
     <form method="post" action="/categories">
       <label>Naam<br><input type="text" name="name" required placeholder="bijv. Boodschappen"></label>

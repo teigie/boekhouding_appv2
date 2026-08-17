@@ -13,13 +13,11 @@
       {% if request.session.get("user_id") %}
         <span class="topbar__pages">
           <a href="/">Dashboard</a>
-          <a href="/accounts">Rekeningen</a>
-          <a href="/categories">Categorieën</a>
           <a href="/upload">Upload</a>
           <a href="/review">Controle</a>
         </span>
         <span class="topbar__account">
-          <span class="muted">{{ request.session.get("user_name") }}</span>
+          <a href="/user/{{ request.session.get('user_name') | urlencode }}">{{ request.session.get("user_name") }}</a>
           <form method="post" action="/logout" class="inline-form">
             <button type="submit" class="link-button">Uitloggen</button>
           </form>
