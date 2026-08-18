@@ -4,7 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Boekhouding{% endblock %}</title>
+  <script>
+    // Moet inline en vóór de stylesheet staan: past een eerder gekozen
+    // thema meteen toe, zodat de pagina niet eerst kort in het verkeerde
+    // thema oplicht voordat theme.js (defer, dus later) zou kunnen
+    // bijsturen. Geen keuze opgeslagen? Dan laat dit het systeem via
+    // prefers-color-scheme bepalen (style.css doet de rest).
+    (function () {
+      var theme = localStorage.getItem("boekhouding-theme");
+      if (theme === "dark" || theme === "light") {
+        document.documentElement.setAttribute("data-theme", theme);
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/static/css/style.css">
+  <script src="/static/js/theme.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -21,9 +35,11 @@
           <form method="post" action="/logout" class="inline-form">
             <button type="submit" class="link-button">Uitloggen</button>
           </form>
+          <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Wissel van thema">🌓</button>
         </span>
       {% else %}
         <a href="/login">Inloggen</a>
+        <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Wissel van thema">🌓</button>
       {% endif %}
     </nav>
   </header>

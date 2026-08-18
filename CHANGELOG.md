@@ -5,6 +5,33 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-18 — Light/dark theme toggle
+
+- Theming was purely `prefers-color-scheme`-driven before (no way to
+  override the OS/browser setting). Added a 🌙/☀️ button in the topbar
+  (`base.html`, `#theme-toggle`) that sets an explicit `data-theme="light"`
+  or `"dark"` attribute on `<html>`, persisted in
+  `localStorage["boekhouding-theme"]`.
+- `style.css`: `:root` now holds the light palette as the unconditional
+  default; `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {...} }`
+  still auto-follows the system when the user hasn't chosen, and
+  `:root[data-theme="dark"] {...}` lets an explicit choice win over the
+  system in either direction — an explicit `light` overrides a dark
+  system, an explicit `dark` overrides a light system.
+- New `app/static/js/theme.js` (the project's first JS file — `defer`-
+  loaded) drives the button: computes the currently *effective* theme
+  (explicit attribute, else system preference) so the very first click
+  always flips what's actually on screen rather than "confirming" the
+  current system theme as a no-op. A small inline script at the top of
+  `base.html`'s `<head>` (must run before the stylesheet, so it can't
+  live in the external file) re-applies a stored choice immediately on
+  every page load, avoiding a flash of the wrong theme before the
+  deferred script would otherwise fix it up.
+- Verified against an isolated scratch copy: `theme.js` and the button
+  markup are served/rendered correctly; traced the CSS cascade by hand
+  for all four (explicit choice × system preference) combinations against
+  actual selector specificity — each resolves to the intended theme.
+
 ### 2026-08-18 — Idle auto-shutdown for the launcher scripts
 
 - The server can now shut itself down after a period of no HTTP traffic —

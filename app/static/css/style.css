@@ -1,3 +1,8 @@
+/* Licht is de standaard op :root. Zonder een expliciete keuze
+   (data-theme op <html>, gezet door theme.js/de localStorage-waarde)
+   volgt het systeem via prefers-color-scheme; een expliciete keuze
+   (data-theme="light"/"dark") wint altijd, in beide richtingen — zie
+   app/static/js/theme.js voor de knop die dat attribuut zet. */
 :root {
   --bg: #f5f6f8;
   --surface: #ffffff;
@@ -8,7 +13,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14161a;
     --surface: #1d2026;
     --text: #e7e9ec;
@@ -16,6 +21,15 @@
     --border: #2b2f37;
     --accent: #5b8def;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14161a;
+  --surface: #1d2026;
+  --text: #e7e9ec;
+  --muted: #9aa1ab;
+  --border: #2b2f37;
+  --accent: #5b8def;
 }
 
 * { box-sizing: border-box; }
@@ -60,6 +74,26 @@ body {
   gap: 0.75rem;
   padding-left: 1.5rem;
   border-left: 1px solid var(--border);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
 }
 
 .topbar__nav a {
