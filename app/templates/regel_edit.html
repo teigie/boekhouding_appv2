@@ -27,8 +27,8 @@
             </label>
             <label class="muted">Combineren met<br>
               <select name="{{ kolom.name }}_mode">
-                <option value="OR" {{ "selected" if huidig.get("mode", "OR") == "OR" }}>OF — matcht als één van de keywords voorkomt</option>
-                <option value="AND" {{ "selected" if huidig.get("mode") == "AND" }}>EN — moet allemaal voorkomen</option>
+                <option value="OR" {{ "selected" if huidig.get("mode", "AND") == "OR" }}>OF — matcht als één van de keywords voorkomt</option>
+                <option value="AND" {{ "selected" if huidig.get("mode", "AND") == "AND" }}>EN — moet allemaal voorkomen</option>
               </select>
             </label>
           </div>

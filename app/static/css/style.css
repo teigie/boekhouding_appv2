@@ -10,6 +10,20 @@
   --muted: #6b7280;
   --border: #e5e7eb;
   --accent: #2563eb;
+  /* Dashboard-lijngrafiek: vaste categorische palet-slots (zie
+     app/dashboard_chart.py) — Inkomsten/Uitgaven/Verschil krijgen altijd
+     dezelfde kleur; elke categorie krijgt een stabiele kleur op basis van
+     haar eigen cat_id (nooit op volgorde van selectie, zodat een lijn
+     niet van kleur wisselt als er een andere categorie bij/afgevinkt
+     wordt). Waarden zijn de gevalideerde (CVD-veilige) paletstappen. */
+  --series-inkomsten: #008300;
+  --series-uitgaven: #e34948;
+  --series-verschil: #2a78d6;
+  --series-cat-0: #eb6834;
+  --series-cat-1: #1baf7a;
+  --series-cat-2: #eda100;
+  --series-cat-3: #e87ba4;
+  --series-cat-4: #4a3aa7;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +34,14 @@
     --muted: #9aa1ab;
     --border: #2b2f37;
     --accent: #5b8def;
+    --series-inkomsten: #008300;
+    --series-uitgaven: #e66767;
+    --series-verschil: #3987e5;
+    --series-cat-0: #d95926;
+    --series-cat-1: #199e70;
+    --series-cat-2: #c98500;
+    --series-cat-3: #d55181;
+    --series-cat-4: #9085e9;
   }
 }
 
@@ -30,6 +52,14 @@
   --muted: #9aa1ab;
   --border: #2b2f37;
   --accent: #5b8def;
+  --series-inkomsten: #008300;
+  --series-uitgaven: #e66767;
+  --series-verschil: #3987e5;
+  --series-cat-0: #d95926;
+  --series-cat-1: #199e70;
+  --series-cat-2: #c98500;
+  --series-cat-3: #d55181;
+  --series-cat-4: #9085e9;
 }
 
 * { box-sizing: border-box; }
@@ -321,4 +351,140 @@ summary {
   padding: 0;
   font-size: 0.9rem;
   text-decoration: underline;
+}
+
+.checkbox-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  margin-bottom: 0;
+}
+
+.checkbox-row input[type="checkbox"] {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+}
+
+.preset-btn {
+  font: inherit;
+}
+
+/* Dashboard-lijngrafiek (server-gerenderde inline SVG, zie
+   app/dashboard_chart.py + app/templates/index.html). Lijnkleuren komen
+   uit de --series-* variabelen (style.css :root), niet hiervandaan. */
+.chart-wrap {
+  position: relative;
+}
+
+.dashboard-chart {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-zero {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3, 3;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+}
+
+.chart-point {
+  stroke: var(--surface);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.chart-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chart-crosshair.is-visible {
+  opacity: 0.6;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  min-width: 9rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.chart-tooltip[hidden] {
+  display: none;
+}
+
+.chart-tooltip__month {
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.chart-tooltip__row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.chart-tooltip__key {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  flex: none;
+}
+
+.chart-tooltip__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip__label {
+  color: var(--muted);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+
+.chart-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }

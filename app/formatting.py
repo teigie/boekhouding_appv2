@@ -19,3 +19,20 @@ def format_date_eu(value: Optional[str]) -> str:
     if not value:
         return ""
     return datetime.strptime(value, "%Y-%m-%d").strftime("%d-%m-%Y")
+
+
+_MAAND_NL = [
+    "jan", "feb", "mrt", "apr", "mei", "jun",
+    "jul", "aug", "sep", "okt", "nov", "dec",
+]
+
+
+def format_month_nl(value: Optional[str]) -> str:
+    """"YYYY-MM" -> "aug 2025" (dashboard month-range inputs/chart axis).
+    Hardcoded Dutch abbreviations rather than the `locale` module — the
+    server may not have a Dutch locale installed, and this avoids that
+    dependency entirely. Empty -> ""."""
+    if not value:
+        return ""
+    year, month = value.split("-")
+    return f"{_MAAND_NL[int(month) - 1]} {year}"

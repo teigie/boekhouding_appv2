@@ -4,21 +4,57 @@
   <h1>Dashboard</h1>
   <p class="muted">
     Overzicht van je permanente grootboek (<code>afschrift</code>) voor de
-    gekozen periode — nog niet gemigreerde rijen (zie
+    gekozen maanden — nog niet gemigreerde rijen (zie
     <a href="/review">Controle</a>) tellen hier niet mee.
   </p>
 
   <section class="card">
-    <form method="get" action="/" class="table-actions" style="flex-wrap: wrap;">
-      <label>Van<br><input type="date" name="start" value="{{ start }}"></label>
-      <label>Tot en met<br><input type="date" name="end" value="{{ end }}"></label>
-      <button type="submit">Filteren</button>
+    <form method="get" action="/" id="dashboard-filter">
+      <input type="hidden" name="filtered" value="1">
+
+      <div class="table-actions" style="flex-wrap: wrap;">
+        <label>Van<br><input type="month" name="start_month" id="start_month" value="{{ start_month }}"></label>
+        <label>Tot en met<br><input type="month" name="end_month" id="end_month" value="{{ end_month }}"></label>
+      </div>
+      <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.5rem;">
+        {% for p in presets %}
+          <button type="button" class="chip preset-btn" data-start="{{ p.start }}" data-end="{{ p.end }}">{{ p.label }}</button>
+        {% endfor %}
+      </div>
+
+      {% if rekeningen %}
+        <p class="muted" style="margin-top: 1.25rem; margin-bottom: 0.35rem;">Rekeningen meetellen</p>
+        <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
+          {% for r in rekeningen %}
+            <label><input type="checkbox" name="rekening_ids" value="{{ r['ID'] }}" {{ "checked" if r['ID']|string in selected_rekening_ids }}> {{ r["name"] }}</label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted" style="margin-top: 1.25rem;">
+          Nog geen rekeningen gekoppeld — koppel er eerst een op je
+          <a href="/user/{{ request.session.get('user_name') | urlencode }}">profielpagina</a>.
+        </p>
+      {% endif %}
+
+      {% if categorieen %}
+        <p class="muted" style="margin-top: 1rem; margin-bottom: 0.35rem;">Categorieën meetellen</p>
+        <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
+          {% for c in categorieen %}
+            <label><input type="checkbox" name="cat_ids" value="{{ c['ID'] }}" {{ "checked" if c['ID']|string in selected_cat_ids }}> {{ c["Name"] }}</label>
+          {% endfor %}
+          <label><input type="checkbox" name="cat_ids" value="none" {{ "checked" if "none" in selected_cat_ids }}> Zonder categorie</label>
+        </div>
+      {% endif %}
+
+      <p class="muted" style="margin-top: 1rem; margin-bottom: 0.35rem;">Lijnen in de grafiek</p>
+      <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
+        {% for opt in graph_line_options %}
+          <label><input type="checkbox" name="graph_lines" value="{{ opt.key }}" {{ "checked" if opt.key in selected_graph_lines }}> {{ opt.label }}</label>
+        {% endfor %}
+      </div>
+
+      <button type="submit" style="margin-top: 1.25rem;">Filteren</button>
     </form>
-    <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.75rem;">
-      {% for p in presets %}
-        <a href="/?start={{ p.start }}&end={{ p.end }}" class="chip">{{ p.label }}</a>
-      {% endfor %}
-    </div>
   </section>
 
   <div class="grid" style="margin-top: 1.5rem;">
@@ -39,8 +75,62 @@
   </div>
 
   <section class="card" style="margin-top: 1.5rem;">
+    <h2>Verloop over tijd</h2>
+    {% if chart %}
+      <div class="chart-wrap">
+        <svg class="dashboard-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+             data-plot-x0="{{ chart.plot.x0 }}" data-plot-x1="{{ chart.plot.x1 }}"
+             data-months="{{ months_json }}" role="img" aria-label="Lijngrafiek van geselecteerde bedragen per maand">
+          {% for t in chart.y_ticks %}
+            <line class="chart-grid" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ t.y }}" y2="{{ t.y }}"></line>
+            <text class="chart-axis-label" x="{{ chart.plot.x0 - 8 }}" y="{{ t.y + 3 }}" text-anchor="end">€ {{ "%.0f"|format(t.value) }}</text>
+          {% endfor %}
+          {% if chart.zero_y is not none %}
+            <line class="chart-zero" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ chart.zero_y }}" y2="{{ chart.zero_y }}"></line>
+          {% endif %}
+          {% for t in chart.x_ticks %}
+            <text class="chart-axis-label" x="{{ t.x }}" y="{{ chart.plot.y1 + 20 }}" text-anchor="middle">{{ t.label|maand_nl }}</text>
+          {% endfor %}
+
+          <line class="chart-crosshair" x1="0" x2="0" y1="{{ chart.plot.y0 }}" y2="{{ chart.plot.y1 }}"></line>
+
+          {% for s in chart.series %}
+            <polyline class="chart-line" style="stroke: var({{ s.color_var }}); stroke-dasharray: {{ s.dash }};"
+                      points="{% for p in s.points %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
+            {% for p in s.points %}
+              <circle class="chart-point" style="fill: var({{ s.color_var }});" cx="{{ p.x }}" cy="{{ p.y }}" r="4"
+                      data-month="{{ p.month }}" data-value="{{ '%.2f'|format(p.value) }}"
+                      data-label="{{ s.label }}" data-color-var="{{ s.color_var }}">
+                <title>{{ s.label }} — {{ p.month|maand_nl }}: € {{ "%.2f"|format(p.value) }}</title>
+              </circle>
+            {% endfor %}
+          {% endfor %}
+        </svg>
+        <div class="chart-tooltip" hidden></div>
+      </div>
+      <div class="chart-legend">
+        {% for s in chart.series %}
+          <span class="chart-legend-item">
+            <span class="chart-legend-swatch" style="background: var({{ s.color_var }});"></span>{{ s.label }}
+          </span>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Waarde per categorielijn is netto (bij − af) per maand, net als
+        Verschil — zo tellen alle lijnen in dezelfde eenheid. Exacte
+        cijfers staan in de tabel hieronder.
+      </p>
+    {% else %}
+      <p class="muted">
+        Selecteer minstens één rekening, categorie en grafieklijn hierboven
+        om de grafiek te zien.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
     <h2>Per categorie</h2>
-    {% if categorieen %}
+    {% if categorie_rows %}
       <div class="table-scroll">
         <table>
           <thead>
@@ -51,7 +141,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for c in categorieen %}
+            {% for c in categorie_rows %}
               <tr>
                 <td>{{ c["category"] }}</td>
                 <td class="col-amount amount-bij">€ {{ "%.2f"|format(c["totaal_bij"]) }}</td>
@@ -62,7 +152,10 @@
         </table>
       </div>
     {% else %}
-      <p class="muted">Geen gegevens in deze periode.</p>
+      <p class="muted">Geen gegevens voor de geselecteerde rekeningen/categorieën in deze periode.</p>
     {% endif %}
   </section>
+{% endblock %}
+{% block scripts %}
+  <script src="/static/js/dashboard.js" defer></script>
 {% endblock %}

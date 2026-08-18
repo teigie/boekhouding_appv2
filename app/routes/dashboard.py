@@ -1,100 +1,204 @@
 """Dashboard: the app's landing page — a real financial report over the
 permanent afschrift ledger (Fase 5, see docs/ARCHITECTURE.md), filterable
-by date range. Rekeningen/categorieën management moved to the per-user
-profile page (app/routes/user.py); this page is purely a report.
+by a whole-calendar-month range (not arbitrary dates — see
+app/dashboard_chart.py), which Rekeningen/categorieën count towards
+Inkomsten/Uitgaven/Verschil, and a linegraph of those totals (and/or
+individual categories) across the selected months.
 
-Defaults to the current calendar month when no range is given (or an
-invalid one), and offers a handful of quick-range presets (this/last
-month, this year, all time) alongside a free-form start/end date form.
-Everything is scoped to the logged-in user's own Rekeningen — never a
-cross-user total.
+Everything on this page is scoped to the logged-in user's own data —
+never a cross-user total — and reads only the permanent ledger
+(afschrift), never temp_afschrift (pending/unresolved rows haven't been
+migrated yet, see sql/migration/README.md).
+
+Rekening/categorie filtering happens in Python, not SQL, on purpose —
+see app/dashboard_chart.py's module docstring and
+sql/queries/afschrift/monthly_totals_for_user.sql.
 """
-import calendar
-from datetime import date, timedelta
-from typing import Optional
+import json
+from datetime import date
+from typing import List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.config import SQL_DIR
+from app.dashboard_chart import (
+    AGGREGATE_STYLES,
+    add_months,
+    build_chart,
+    build_series,
+    category_style,
+    month_end,
+    month_range,
+    parse_month,
+)
 from app.db import get_connection
 from app.session import require_login
 from app.templating import templates
 
 router = APIRouter()
 
-_TOTALS_PER_CATEGORY_SQL = (
-    SQL_DIR / "queries" / "afschrift" / "totals_per_category_for_user.sql"
-).read_text(encoding="utf-8")
+_MONTHLY_TOTALS_SQL = (SQL_DIR / "queries" / "afschrift" / "monthly_totals_for_user.sql").read_text(encoding="utf-8")
+_DATE_BOUNDS_SQL = (SQL_DIR / "queries" / "afschrift" / "date_bounds_for_user.sql").read_text(encoding="utf-8")
+_LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 
-# A date outside any real bank statement's range — used as the "Alles"
-# (all time) preset's bounds so the same BETWEEN-based query serves it
-# without a separate NULL-handling code path.
-_EPOCH_START = date(1, 1, 1)
-_EPOCH_END = date(9999, 12, 31)
-
-
-def _month_bounds(d: date) -> tuple[date, date]:
-    start = d.replace(day=1)
-    last_day = calendar.monthrange(d.year, d.month)[1]
-    return start, d.replace(day=last_day)
+_DEFAULT_GRAPH_LINES = {"inkomsten", "uitgaven", "verschil"}
+# The uncategorized bucket (Afschrift_cat_ID IS NULL) is its own
+# selectable pseudo-category everywhere on this page.
+_NONE_CAT_KEY = "none"
 
 
-def _parse_date(value: Optional[str], fallback: date) -> date:
-    if not value:
-        return fallback
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return fallback
+def _cat_key(cat_id) -> str:
+    return _NONE_CAT_KEY if cat_id is None else str(cat_id)
 
 
-def _build_presets(today: date) -> list[dict]:
-    this_start, this_end = _month_bounds(today)
-    prev_start, prev_end = _month_bounds(this_start - timedelta(days=1))
-    year_start, year_end = today.replace(month=1, day=1), today.replace(month=12, day=31)
+def _default_month_range(today: date) -> tuple[date, date]:
+    """Last 6 months (incl. the current one) — a single month default
+    would make the linegraph a single dot, which defeats its purpose."""
+    return add_months(today.replace(day=1), -5), today.replace(day=1)
+
+
+def _build_presets(today: date, data_bounds: tuple[Optional[str], Optional[str]]) -> list[dict]:
+    this_month = today.replace(day=1)
+    last6_start, last6_end = _default_month_range(today)
+    year_start, year_end = today.replace(month=1, day=1), today.replace(month=12, day=1)
+
+    min_datum, max_datum = data_bounds
+    if min_datum and max_datum:
+        alles_start = date.fromisoformat(min_datum).replace(day=1)
+        alles_end = date.fromisoformat(max_datum).replace(day=1)
+    else:
+        alles_start = alles_end = this_month
+
+    def key(d: date) -> str:
+        return f"{d.year:04d}-{d.month:02d}"
+
     return [
-        {"label": "Deze maand", "start": this_start.isoformat(), "end": this_end.isoformat()},
-        {"label": "Vorige maand", "start": prev_start.isoformat(), "end": prev_end.isoformat()},
-        {"label": "Dit jaar", "start": year_start.isoformat(), "end": year_end.isoformat()},
-        {"label": "Alles", "start": _EPOCH_START.isoformat(), "end": _EPOCH_END.isoformat()},
+        {"label": "Deze maand", "start": key(this_month), "end": key(this_month)},
+        {"label": "Laatste 6 maanden", "start": key(last6_start), "end": key(last6_end)},
+        {"label": "Dit jaar", "start": key(year_start), "end": key(year_end)},
+        {"label": "Alles", "start": key(alles_start), "end": key(alles_end)},
     ]
 
 
 @router.get("/")
-def home(request: Request, start: Optional[str] = None, end: Optional[str] = None):
+def home(
+    request: Request,
+    start_month: Optional[str] = None,
+    end_month: Optional[str] = None,
+    rekening_ids: List[str] = Query(default_factory=list),
+    cat_ids: List[str] = Query(default_factory=list),
+    graph_lines: List[str] = Query(default_factory=list),
+    filtered: Optional[str] = None,
+):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
 
-    today = date.today()
-    default_start, default_end = _month_bounds(today)
-    range_start = _parse_date(start, default_start)
-    range_end = _parse_date(end, default_end)
-    if range_end < range_start:
-        range_start, range_end = range_end, range_start
-
     conn = get_connection()
     try:
+        rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user["id"]}).fetchall()
+        categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user["id"]}).fetchone()
+
+        today = date.today()
+        default_start, default_end = _default_month_range(today)
+        range_start = parse_month(start_month, default_start)
+        range_end = parse_month(end_month, default_end)
+        if range_end < range_start:
+            range_start, range_end = range_end, range_start
+
         rows = conn.execute(
-            _TOTALS_PER_CATEGORY_SQL,
-            {"user_id": user["id"], "start": range_start.isoformat(), "end": range_end.isoformat()},
+            _MONTHLY_TOTALS_SQL,
+            {
+                "user_id": user["id"],
+                "start": range_start.isoformat(),
+                "end": month_end(range_end).isoformat(),
+            },
         ).fetchall()
     finally:
         conn.close()
 
-    totaal_inkomsten = sum(r["totaal_bij"] for r in rows)
-    totaal_uitgaven = sum(r["totaal_af"] for r in rows)
+    all_rekening_ids = {str(r["ID"]) for r in rekeningen}
+    all_cat_ids = {_NONE_CAT_KEY} | {str(c["ID"]) for c in categorieen}
+
+    # Distinguishes "form actually submitted" (even with everything
+    # unchecked — that's a legitimate all-zero view) from "fresh page
+    # load, no filter chosen yet" (defaults to everything selected).
+    is_filtered = filtered is not None
+    selected_rekening_ids = set(rekening_ids) if is_filtered else set(all_rekening_ids)
+    selected_cat_ids = set(cat_ids) if is_filtered else set(all_cat_ids)
+    selected_graph_lines = set(graph_lines) if is_filtered else set(_DEFAULT_GRAPH_LINES)
+
+    filtered_rows = [
+        r for r in rows
+        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
+    ]
+
+    totaal_inkomsten = sum(r["totaal_bij"] for r in filtered_rows)
+    totaal_uitgaven = sum(r["totaal_af"] for r in filtered_rows)
+
+    per_cat: dict[str, dict] = {}
+    for r in filtered_rows:
+        key = _cat_key(r["cat_id"])
+        entry = per_cat.setdefault(key, {"category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0})
+        entry["totaal_bij"] += r["totaal_bij"]
+        entry["totaal_af"] += r["totaal_af"]
+    categorie_rows = sorted(per_cat.values(), key=lambda e: (-e["totaal_af"], -e["totaal_bij"]))
+
+    months = month_range(range_start, range_end)
+    monthly_values: dict[tuple, float] = {}
+    for r in filtered_rows:
+        m = r["month"]
+        cat_line_key = f"cat:{_cat_key(r['cat_id'])}"
+        monthly_values[(m, "inkomsten")] = monthly_values.get((m, "inkomsten"), 0.0) + r["totaal_bij"]
+        monthly_values[(m, "uitgaven")] = monthly_values.get((m, "uitgaven"), 0.0) + r["totaal_af"]
+        monthly_values[(m, cat_line_key)] = monthly_values.get((m, cat_line_key), 0.0) + (r["totaal_bij"] - r["totaal_af"])
+    for m in months:
+        monthly_values[(m, "verschil")] = monthly_values.get((m, "inkomsten"), 0.0) - monthly_values.get((m, "uitgaven"), 0.0)
+
+    # Only categories still in-scope (selected_cat_ids) can be graphed —
+    # keeps "what's plotted" a subset of "what's counted", never a
+    # category the totals above have already excluded.
+    graph_line_options = [{"key": k, "label": v["label"]} for k, v in AGGREGATE_STYLES.items()]
+    for c in categorieen:
+        if str(c["ID"]) in selected_cat_ids:
+            graph_line_options.append({"key": f"cat:{c['ID']}", "label": c["Name"]})
+    if _NONE_CAT_KEY in selected_cat_ids:
+        graph_line_options.append({"key": "cat:none", "label": "Zonder categorie"})
+
+    line_defs = []
+    for key in AGGREGATE_STYLES:
+        if key in selected_graph_lines:
+            line_defs.append({"key": key, **AGGREGATE_STYLES[key]})
+    for c in categorieen:
+        line_key = f"cat:{c['ID']}"
+        if line_key in selected_graph_lines and str(c["ID"]) in selected_cat_ids:
+            line_defs.append({"key": line_key, **category_style(c["ID"], c["Name"])})
+    if "cat:none" in selected_graph_lines and _NONE_CAT_KEY in selected_cat_ids:
+        line_defs.append({"key": "cat:none", **category_style(None, "Zonder categorie")})
+
+    series = build_series(months, line_defs, monthly_values)
+    chart = build_chart(months, series)
 
     return templates.TemplateResponse(
         request, "index.html",
         {
-            "categorieen": rows,
+            "rekeningen": rekeningen,
+            "categorieen": categorieen,
+            "categorie_rows": categorie_rows,
             "totaal_inkomsten": totaal_inkomsten,
             "totaal_uitgaven": totaal_uitgaven,
             "verschil": totaal_inkomsten - totaal_uitgaven,
-            "start": range_start.isoformat(),
-            "end": range_end.isoformat(),
-            "presets": _build_presets(today),
+            "start_month": f"{range_start.year:04d}-{range_start.month:02d}",
+            "end_month": f"{range_end.year:04d}-{range_end.month:02d}",
+            "selected_rekening_ids": selected_rekening_ids,
+            "selected_cat_ids": selected_cat_ids,
+            "selected_graph_lines": selected_graph_lines,
+            "graph_line_options": graph_line_options,
+            "chart": chart,
+            "months_json": json.dumps(months),
+            "presets": _build_presets(today, (bounds["min_datum"], bounds["max_datum"]) if bounds else (None, None)),
         },
     )

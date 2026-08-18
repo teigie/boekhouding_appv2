@@ -39,11 +39,19 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   per-table save button (`set_category.sql`, run once per row submitted)
   — scoped to the logged-in user via a Rekening ownership check baked
   into the UPDATE itself.
-- `afschrift/` — reporting over the permanent ledger: the dashboard's
-  date-range totals per category (`totals_per_category_for_user.sql`),
-  scoped to the logged-in user's own Rekeningen. Only reads `afschrift`,
-  never `temp_afschrift` — rows not yet migrated (Fase 4) don't count
-  towards real totals.
+- `afschrift/` — reporting over the permanent ledger, scoped to the
+  logged-in user's own Rekeningen, reading only `afschrift` (never
+  `temp_afschrift` — rows not yet migrated (Fase 4) don't count towards
+  real totals). `monthly_totals_for_user.sql` is the dashboard's one
+  data query: per month, per Rekening, per category income/expenditure
+  sums for the whole selected month range — a small, fixed result set
+  that `app/routes/dashboard.py` then filters/sums in Python according
+  to which Rekeningen/categories are checked (deliberately not a dynamic
+  SQL IN-list — see the note at the bottom of this file). Feeds the
+  headline totals, the per-category table, and (via
+  `app/dashboard_chart.py`) the linegraph's monthly series, all from one
+  query. `date_bounds_for_user.sql` gives the dashboard's "Alles" preset
+  real month bounds instead of an arbitrary epoch range.
 - `regels/` — a user's own categorization rules: `list_for_user.sql`
   nests every rule (rule → column → keywords) for the profile page's
   read-only summary; `find_for_user.sql` is the ownership check for the
@@ -64,4 +72,13 @@ queries above; only the GET view moved.
 
 Every query the app runs should end up as a tracked `.sql` file here (or in
 `categorization/`/`migration/`) — `app/db.py` only knows how to load and execute
-a `.sql` file, it never builds SQL strings inline.
+a `.sql` file, it never builds SQL strings inline. One consequence: a
+filter with a variable number of selected values (e.g. the dashboard's
+checked Rekeningen/categorieën) is never expressed as a dynamic `IN (?,
+?, ...)` list, since the placeholder count would vary per request — the
+query instead fetches one small, fixed-shape result set (scoped only by
+things with a constant number of parameters, like `:user_id`/a date
+range) and the variable-length filtering happens in Python afterwards.
+Only reasonable because the result sets involved are small (a handful of
+Rekeningen x categorieën x months, not a full table scan) — see
+`app/dashboard_chart.py`.

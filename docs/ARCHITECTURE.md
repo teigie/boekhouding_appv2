@@ -395,18 +395,45 @@ rapport, niet meer de vroegere plek voor Rekeningen/categorieën-beheer
 `afschrift`, nooit `temp_afschrift` — nog niet gemigreerde rijen tellen
 niet mee in de cijfers.
 
-Filterbaar op periode (`?start=...&end=...`, ISO-datums), met de huidige
-kalendermaand als standaard wanneer geen (of een ongeldige) periode is
-opgegeven, plus een paar snelkeuzes (deze/vorige maand, dit jaar, alles —
-"alles" is intern gewoon een zeer brede datumrange, geen aparte
-NULL-behandeling). Één query
-(`sql/queries/afschrift/totals_per_category_for_user.sql`) sommeert
-inkomsten (`Af_bij = 'Bij'`) en uitgaven (`Af_bij = 'Af'`) per categorie
-voor de opgegeven periode, gescopet op de rekeningen van de ingelogde
-gebruiker; de paginatotalen (inkomsten/uitgaven/verschil bovenaan) zijn
-simpelweg de som van diezelfde rijen in Python — geen aparte totaalquery.
-Filteren op rekening, of aggregeren per rekening/langere periode dan een
-jaar, is nog niet gebouwd.
+Filterbaar op hele kalendermaanden (`?start_month=...&end_month=...`,
+"YYYY-MM" — nooit losse datums, zie `app/dashboard_chart.py`'s
+`parse_month`/`month_range`), met de laatste 6 maanden als standaard
+wanneer geen (of een ongeldige) periode is opgegeven — één maand als
+standaard zou de lijngrafiek een enkel punt geven. Snelkeuzes: deze
+maand, laatste 6 maanden, dit jaar, en "alles" (van/tot de eerste/laatste
+maand met daadwerkelijk data voor deze gebruiker,
+`sql/queries/afschrift/date_bounds_for_user.sql` — geen arbitraire
+epoch-range meer, dat werkte niet meer met een `<input type="month">`).
+
+Daarnaast kan de gebruiker precies kiezen welke Rekeningen en categorieën
+meetellen voor Inkomsten/Uitgaven/Verschil (checkboxes, alles aangevinkt
+als standaard bij een verse paginalading; een expliciet lege selectie na
+filteren toont terecht nul). Een verborgen `filtered=1`-veld in het
+formulier onderscheidt "net gefilterd, dus vertrouw exact wat is
+aangevinkt" van "eerste paginalading, dus alles selecteren" — zonder dat
+veld zou een bewust leeggemaakte selectie niet te onderscheiden zijn van
+"nog geen filter gekozen". Rekening-/categorieselectie gebeurt in
+Python, niet in SQL: één query
+(`sql/queries/afschrift/monthly_totals_for_user.sql`) haalt sommen per
+maand, per Rekening, per categorie op voor de hele periode (een kleine,
+vaste resultaatset), en `app/routes/dashboard.py` filtert/sommeert die
+rijen op basis van de aangevinkte ID's — bewust geen dynamische
+SQL IN-lijst met een wisselend aantal placeholders (zie
+sql/queries/README.md).
+
+De lijngrafiek (server-gerenderde inline SVG, `app/dashboard_chart.py`)
+toont per geselecteerde maand één punt, voor elke aangevinkte lijn:
+Inkomsten/Uitgaven/Verschil totaal, en/of één lijn per — nog altijd
+meetellende — categorie (netto bij−af per maand, dezelfde eenheid als
+Verschil). Kleur én stippellijnstijl van een lijn zijn afgeleid van haar
+eigen identiteit (vaste rol voor de drie totalen, `cat_id % n` voor een
+categorie), nooit van haar positie in de huidige selectie — een categorie
+aan/uitvinken laat andere lijnen dus nooit van kleur wisselen. Palet is
+de gevalideerde categorische reeks uit de dataviz-skill (zie de
+`--series-*`-variabelen in `style.css`, met eigen licht/donker-paren zoals
+de rest van de theming). Hover toont een crosshair + tooltip met alle
+zichtbare lijnen op die maand (`app/static/js/dashboard.js`); de
+onderliggende cijfers staan ook gewoon in de categorietabel eronder.
 
 ## Logging
 

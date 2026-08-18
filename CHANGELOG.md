@@ -5,6 +5,65 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-18 — Dashboard: month-range filtering, Rekening/categorie selection, linegraph
+
+- Date filtering is now whole calendar months only (`?start_month=&end_month=`,
+  "YYYY-MM" via `<input type="month">`) instead of arbitrary dates —
+  `app/dashboard_chart.py`'s `parse_month`/`month_range`/`month_end`.
+  Default changed from "this month" to the **last 6 months**, since a
+  single month would make the new linegraph a single dot. Presets: deze
+  maand, laatste 6 maanden, dit jaar, alles (now computed from the
+  user's actual earliest/latest ledger date via the new
+  `sql/queries/afschrift/date_bounds_for_user.sql`, not an arbitrary
+  epoch range — that stopped making sense once the input widget requires
+  a real "YYYY-MM").
+- The user can now choose exactly which Rekeningen and categorieën count
+  towards Inkomsten/Uitgaven/Verschil (checkboxes; everything selected by
+  default on a fresh page load). A hidden `filtered=1` field distinguishes
+  "just filtered — trust exactly what's checked, including a deliberate
+  all-zero selection" from "fresh load — default to everything". Selection
+  filtering happens in Python, not a dynamic SQL `IN (...)` list (this
+  project keeps all SQL as static tracked files — see the new note at the
+  bottom of `sql/queries/README.md`): one query,
+  `sql/queries/afschrift/monthly_totals_for_user.sql` (replaces
+  `totals_per_category_for_user.sql`), fetches per-month/per-Rekening/
+  per-category sums for the whole range — a small fixed result set — and
+  `app/routes/dashboard.py` filters/sums it according to the checked IDs.
+  "Zonder categorie" (uncategorized rows) is its own selectable
+  pseudo-category throughout, so it's never silently in- or excluded.
+- New linegraph, one point per selected month, for any combination of
+  Inkomsten/Uitgaven/Verschil totals and/or individual (still in-scope)
+  categories — a category's line is its net (bij − af) per month, the
+  same unit as Verschil. Rendered as inline SVG, built server-side by the
+  new `app/dashboard_chart.py` (pure coordinate math) and
+  `app/templates/index.html` (the actual `<svg>` markup) — no charting
+  library, consistent with the project's plain-CSS/JS frontend.
+  `app/static/js/dashboard.js` adds a crosshair + one shared tooltip
+  listing every visible line at the nearest month, and makes the preset
+  buttons re-submit the filter form with just the month range changed
+  (a plain link would have reset the Rekening/categorie/line checkboxes).
+- Colors follow the dataviz skill's validated categorical palette
+  (`--series-*` custom properties in `style.css`, with the theme
+  toggle's light/dark pairing). Inkomsten/Uitgaven/Verschil get fixed
+  colors + dash patterns always; each category's color and dash pattern
+  are derived from its own `cat_id` (`cat_id % n`), never from its
+  position in the current selection — checking/unchecking one category
+  never repaints another's line. Ran the skill's palette validator: the
+  3 aggregate lines pass all-pairs cleanly; the full aggregates+5-category
+  set does not clear the all-pairs CVD floor (a known limit of any
+  8-hue categorical set per the skill's own reference palette docs) —
+  mitigated with per-line dash patterns (not color-only identity), a
+  legend, hover tooltips with text values, and the always-present
+  per-category table as the exact-numbers fallback.
+- Verified end-to-end against an isolated scratch copy seeded with 7
+  months of realistic multi-Rekening, multi-category data: default view
+  totals, explicit Rekening/categorie/graph-line filtering (including an
+  isolated "Zonder categorie"-only view), the deliberate all-unchecked
+  zero state, and a graph-line request for a category outside the
+  calculation scope being silently (and correctly) dropped rather than
+  erroring. Confirmed no impact on unrelated pages (`/review`, `/upload`,
+  the profile page) or the real dev DB/server.
+
 ### 2026-08-18 — Light/dark theme toggle
 
 - Theming was purely `prefers-color-scheme`-driven before (no way to
