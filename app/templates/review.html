@@ -4,6 +4,42 @@
 {% block content %}
   <h1>Handmatige controle</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <section class="card">
+    <h2>Categorisatie opnieuw proberen</h2>
+    <p class="muted">
+      Heb je net een nieuwe categorie of regel toegevoegd? Dan hoef je niet
+      opnieuw te uploaden — dit probeert al je rijen (over al je
+      rekeningen) nog eens tegen je bijgewerkte regels. Onopgeloste en
+      ambigue rijen krijgen een nieuwe kans; al opgeloste rijen worden
+      alleen aangeraakt als een nieuwe regel er nu óók mee overeenkomt —
+      die worden dan ambigu gemaakt zodat je opnieuw kunt kiezen. Een
+      opgeloste rij wordt nooit teruggezet naar onopgelost en krijgt nooit
+      stilzwijgend een andere categorie.
+    </p>
+    <form method="post" action="/review/recategorize">
+      <button type="submit">Categorisatie opnieuw proberen</button>
+    </form>
+    {% if recategorize_ran %}
+      {% if recategorization %}
+        <p style="margin-top: 1rem;">
+          {{ recategorization.row_count }} rij(en) van status veranderd:
+          {{ recategorization.resolved }} nu opgelost,
+          {{ recategorization.unresolved }} nu onopgelost,
+          {{ recategorization.ambiguous }} nu ambigu.
+          {% if recategorization.ambiguous %}
+            Dat kan komen doordat een nieuwe regel conflicteert met een rij
+            die eerder al was opgelost — zoek de ambigue rijen hieronder op.
+          {% endif %}
+        </p>
+      {% else %}
+        <p class="muted" style="margin-top: 1rem;">
+          Niets veranderd — geen enkele rij kwam op een ander resultaat uit dan het al had.
+        </p>
+      {% endif %}
+    {% endif %}
+  </section>
+
   <p class="muted">
     Alle rijen die klaarstaan in <code>temp_afschrift</code>, per rekening
     in een eigen tabel — opgelost én nog niet. Kies per rij een categorie
@@ -25,6 +61,19 @@
       {{ counts.ambiguous }} ambigu.
     </p>
 
+    <section class="card">
+      <form method="get" action="/review">
+        <input type="hidden" name="filtered" value="1">
+        <p class="muted" style="margin-top: 0; margin-bottom: 0.35rem;">Toon status</p>
+        <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
+          <label><input type="checkbox" name="status" value="0" {{ "checked" if "0" in selected_statuses }}> Onopgelost</label>
+          <label><input type="checkbox" name="status" value="1" {{ "checked" if "1" in selected_statuses }}> Opgelost</label>
+          <label><input type="checkbox" name="status" value="2" {{ "checked" if "2" in selected_statuses }}> Ambigu</label>
+        </div>
+        <button type="submit" style="margin-top: 0.75rem;">Filteren</button>
+      </form>
+    </section>
+
     {% for group in groups %}
       <section class="card review-group" id="rekening-{{ group.rekening_id }}">
         <h2>{{ group.rekening }}</h2>
@@ -36,57 +85,61 @@
         </p>
 
         <form method="post" action="/review/{{ group.rekening_id }}/save">
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Datum</th>
-                  <th>Naam</th>
-                  <th>Mededeling</th>
-                  <th class="col-amount">Bedrag</th>
-                  <th>Mutatiesoort</th>
-                  <th>Categorie</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in group.rows %}
+          {% if not group.display_rows %}
+            <p class="muted">Geen rijen met de gekozen status in deze rekening.</p>
+          {% else %}
+            <div class="table-scroll">
+              <table>
+                <thead>
                   <tr>
-                    <td>{{ row["Datum"] | eu_date }}</td>
-                    <td>{{ row["Naam"] }}</td>
-                    <td class="col-wrap">{{ row["Mededeling"] or "" }}</td>
-                    <td class="col-amount {{ 'amount-af' if row['Af_bij'] == 'Af' else 'amount-bij' }}">
-                      {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(row["Bedrag_eur"]) }}
-                    </td>
-                    <td>{{ row["Mutatiesoort"] }}</td>
-                    <td class="category-cell">
-                      <select
-                        name="cat_id_{{ row['ID'] }}"
-                        class="category-select"
-                        onchange="this.closest('td').querySelector('.category-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
-                      >
-                        <option value="" disabled {{ "selected" if not row["Categorie"] }}>— kies —</option>
-                        {% for cat in categories %}
-                          <option value="{{ cat['ID'] }}" {{ "selected" if cat["Name"] == row["Categorie"] }}>{{ cat["Name"] }}</option>
-                        {% endfor %}
-                        <option value="__new__">+ nieuwe categorie…</option>
-                      </select>
-                      <input
-                        type="text"
-                        name="new_category_name_{{ row['ID'] }}"
-                        placeholder="Naam nieuwe categorie"
-                        class="category-new"
-                        style="display: none;"
-                      >
-                    </td>
-                    <td class="{{ {0: 'result-fail', 1: 'result-ok', 2: 'result-ambiguous'}[row['processed']] }}">
-                      {{ {0: "Onopgelost", 1: "Opgelost", 2: "Ambigu"}[row["processed"]] }}
-                    </td>
+                    <th>Datum</th>
+                    <th>Naam</th>
+                    <th>Mededeling</th>
+                    <th class="col-amount">Bedrag</th>
+                    <th>Mutatiesoort</th>
+                    <th>Categorie</th>
+                    <th>Status</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {% for row in group.display_rows %}
+                    <tr>
+                      <td>{{ row["Datum"] | eu_date }}</td>
+                      <td>{{ row["Naam"] }}</td>
+                      <td class="col-wrap">{{ row["Mededeling"] or "" }}</td>
+                      <td class="col-amount {{ 'amount-af' if row['Af_bij'] == 'Af' else 'amount-bij' }}">
+                        {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(row["Bedrag_eur"]) }}
+                      </td>
+                      <td>{{ row["Mutatiesoort"] }}</td>
+                      <td class="category-cell">
+                        <select
+                          name="cat_id_{{ row['ID'] }}"
+                          class="category-select"
+                          onchange="this.closest('td').querySelector('.category-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+                        >
+                          <option value="" disabled {{ "selected" if not row["Categorie"] }}>— kies —</option>
+                          {% for cat in categories %}
+                            <option value="{{ cat['ID'] }}" {{ "selected" if cat["Name"] == row["Categorie"] }}>{{ cat["Name"] }}</option>
+                          {% endfor %}
+                          <option value="__new__">+ nieuwe categorie…</option>
+                        </select>
+                        <input
+                          type="text"
+                          name="new_category_name_{{ row['ID'] }}"
+                          placeholder="Naam nieuwe categorie"
+                          class="category-new"
+                          style="display: none;"
+                        >
+                      </td>
+                      <td class="{{ {0: 'result-fail', 1: 'result-ok', 2: 'result-ambiguous'}[row['processed']] }}">
+                        {{ {0: "Onopgelost", 1: "Opgelost", 2: "Ambigu"}[row["processed"]] }}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
 
           <div class="table-actions">
             <button type="submit">Tabel opslaan</button>

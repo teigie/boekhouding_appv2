@@ -80,6 +80,28 @@ Files:
 - `clear_temp_afschrift2.sql` — deletes the account's now-categorized
   backlog. Run immediately after `categorize_batch.sql`, in the same
   transaction.
+- `recategorize_temp_afschrift.sql` — the "Categorisatie opnieuw
+  proberen" button on `/upload` (`app/categorization.py::recategorize_pending`).
+  Re-runs the same rule-matching logic, but against `temp_afschrift`
+  (not `temp_afschrift2`) and across *all* of a user's rows/accounts at
+  once, any `processed` value — so rows that didn't match anything at
+  upload time get a fresh shot after the user adds/edits a rule, without
+  re-uploading the file. `processed = 1` rows are handled asymmetrically:
+  since there's no flag distinguishing an automatic match from a manual
+  pick on `/review` (both are just `processed = 1`, see
+  `sql/queries/temp_afschrift/set_category.sql`), an already-resolved row
+  is only ever *promoted* to ambiguous (`processed = 2`) — when a newly
+  added rule now also matches it, surfacing that conflict instead of
+  silently keeping the old single answer — and is never demoted back to
+  unresolved (the normal outcome for a manual pick, which no rule has to
+  match) or have its category silently swapped for a different single
+  match. Rows that were already 0 or 2 move freely to whatever the fresh
+  match implies. Rows already migrated to `afschrift` aren't touched
+  (they're not in this table). Returns only the rows whose outcome
+  actually changed. One necessary adaptation: `temp_afschrift` only has
+  `Mutatiesoort_ID`, not the original raw text, so a `Mutatiesoort` rule
+  condition is checked against any raw label in `mutatiesoort_mapping`
+  that resolves to the same ID instead.
 
 Categorization must always drain an account's **entire** current
 `temp_afschrift2` backlog in one atomic run, never a partial subset — the

@@ -5,6 +5,96 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-18 — Moved "Categorisatie opnieuw proberen" to /review + status filter
+
+- **Moved** the "Categorisatie opnieuw proberen" button from `/upload` to
+  the top of `/review` (Controle) — that's the page where its outcome
+  (newly resolved/ambiguous rows) actually matters and is visible.
+  `POST /upload/recategorize` → `POST /review/recategorize`
+  (`app/routes/review.py`); removed from `app/routes/upload.py`/
+  `upload.html` entirely. `app/categorization.py::recategorize_pending`
+  itself is unchanged. The result message renders inline at the top of
+  `/review`, unfiltered (all statuses shown), so anything that just
+  changed is visible regardless of whatever status filter was active
+  before the click.
+- **New status filter on `/review`**: checkboxes (Onopgelost/Opgelost/
+  Ambigu, `?status=&filtered=1` — same hidden-`filtered`-marker pattern
+  as the dashboard) control which rows are *displayed* per Rekening
+  table (`group.display_rows`). Counts, the "fully resolved" check, and
+  migration eligibility always use the account's full, unfiltered row
+  set (`group.rows`/`group.counts`/`group.all_resolved`) — filtering can
+  never make an account look (or not look) migration-ready just because
+  some rows are filtered out of view. A group with no rows matching the
+  current filter shows a short message instead of an empty table.
+- Docs: `docs/ARCHITECTURE.md` Fase 2 (recategorize location) and Fase 3
+  (status filter, display-vs-full-set distinction) updated.
+- **Verified** on an isolated scratch copy (real dev DB/server untouched,
+  checksummed before/after): confirmed the button no longer appears on
+  `/upload` and appears first (above the explanatory paragraph) on
+  `/review`; the status filter correctly narrows the displayed rows
+  while the totals line and migrate-button state stay based on the full
+  set (e.g. filtering to "Opgelost" only showed 2 of 6 rows while the
+  page still correctly reported "nog niet alle rijen opgelost"); a
+  filter matching zero rows in a group shows the fallback message;
+  `/review/recategorize` still resolves/flags rows correctly and
+  re-renders unfiltered; the full save → migrate pipeline was exercised
+  end-to-end afterward and still moved all 6 rows into `afschrift`
+  correctly, confirming the filter changes didn't regress the existing
+  save/migrate flow.
+
+### 2026-08-18 — Upload page: "Categorisatie opnieuw proberen" button
+
+- New button on `/upload` that re-runs automatic rule-based categorization
+  on demand, without a re-upload — for when the user adds or edits a
+  category/rule *after* already uploading a file. Reconsiders **all**
+  of the user's `temp_afschrift` rows across all their accounts, any
+  `processed` value — including already-resolved ones, in case a newly
+  added rule now also matches a row that was previously resolved to
+  exactly one category (surfaced as a fresh conflict, not silently kept).
+- New query `sql/categorization/recategorize_temp_afschrift.sql`: same
+  matching logic as `categorize_batch.sql`/`match_custom_rules.sql`, but
+  targets `temp_afschrift` (not `temp_afschrift2`). Handles `processed = 1`
+  rows asymmetrically, since there's no flag distinguishing an automatic
+  match from a manual pick on `/review` (both are just `processed = 1`,
+  see `sql/queries/temp_afschrift/set_category.sql`): an already-resolved
+  row is only ever *promoted* to ambiguous (`processed = 2`) when a new
+  rule now also matches it — never demoted back to unresolved just
+  because zero rules currently match it (the normal case for a manual
+  pick), and never has its category silently swapped for a different
+  single match. Rows already `processed` 0 or 2 move freely to whatever
+  the fresh match implies. Only rows whose outcome actually changed are
+  updated/returned. One adaptation: `temp_afschrift` only keeps
+  `Mutatiesoort_ID`, not the original raw text, so a rule's `Mutatiesoort`
+  condition is checked against any raw label in `mutatiesoort_mapping`
+  that resolves to the same ID.
+- `app/categorization.py::recategorize_pending` (+ `RecategorizeResult`
+  dataclass, counting only *changed* rows) orchestrates it;
+  `POST /upload/recategorize` (`app/routes/upload.py`) wires it to the
+  new button and re-renders `upload.html` with the outcome (rows changed
+  / now resolved / now unresolved / now ambiguous — with a note pointing
+  at `/review` when a new conflict appeared — or a "nothing changed"
+  message).
+- Docs: `docs/ARCHITECTURE.md` Fase 2 and `sql/categorization/README.md`
+  updated to describe the new query and its promote-only-to-ambiguous and
+  `Mutatiesoort` adaptations.
+- **Verified** on isolated scratch copies (real dev DB/server untouched
+  throughout, checksummed before/after): a plain positive case (rows
+  unresolved → now match a new rule) counts and categorizes correctly and
+  reports only the changed rows; a row manually resolved on `/review`
+  (matching zero rules) is left completely untouched by a later retry
+  even after a new rule is added that happens to also match it singly
+  (protection against silently swapping a manual pick's category); an
+  **automatically**-resolved row that a newly added rule now *also*
+  matches is correctly promoted to ambiguous with its category cleared,
+  and shows up in the "nu ambigu" count with the `/review` pointer;
+  repeated retries with no rule changes are idempotent (`None`, "nothing
+  changed"); a second, ruleless user's own pending rows are unaffected by
+  the first user's rules (per-user isolation holds) even though the row
+  content would otherwise match. Also confirmed via `/login` +
+  `POST /upload/recategorize` against real throwaway servers that all
+  three message states (nothing changed / resolved / newly ambiguous)
+  render correctly end-to-end.
+
 ### 2026-08-18 — Fix: ING NL importer had the balance-chain row order backwards
 
 - **Bug**: `app/importers/ing_nl.py::parse()` returned rows in the CSV's own

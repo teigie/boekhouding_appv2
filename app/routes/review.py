@@ -2,7 +2,10 @@
 Fase 4 migration trigger. Lists every temp_afschrift row (any `processed`
 status) for the logged-in user's own accounts, grouped in one table per
 Rekening, so both what's still pending and what's already resolved are
-visible in one place.
+visible in one place. A status filter (onopgelost/opgelost/ambigu) only
+affects which rows are *displayed* per group — counts, the "fully
+resolved" check, and migration eligibility always use the account's full,
+unfiltered row set, never the filtered display subset.
 
 Correcting a row's category is the main thing this page can do — a
 dropdown per row, saved for a whole account's table in one go via a single
@@ -13,10 +16,17 @@ which re-checks the same condition against the database (never trusts the
 already-rendered page state) via app/migration.py before moving anything.
 Correcting the account or picking between ambiguous keyword matches is
 still a later step.
+
+Also hosts the "Categorisatie opnieuw proberen" button (moved here from
+/upload — this is where its outcome actually matters) — see
+app/categorization.py::recategorize_pending.
 """
-from fastapi import APIRouter, Request
+from typing import List, Optional
+
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse
 
+from app.categorization import recategorize_pending
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
@@ -39,6 +49,9 @@ _FIND_REKENING_FOR_USER_SQL = (
 ).read_text(encoding="utf-8")
 
 _NEW_CATEGORY_VALUE = "__new__"
+# processed values as strings, since that's how they travel through
+# checkbox form values/query params.
+_ALL_STATUSES = {"0", "1", "2"}
 
 
 def _counts(rows):
@@ -49,8 +62,12 @@ def _counts(rows):
     }
 
 
-def _grouped_by_rekening(rows):
-    """rows is already ORDER BY Rekening-name, ID — group without re-sorting."""
+def _grouped_by_rekening(rows, selected_statuses=_ALL_STATUSES):
+    """rows is already ORDER BY Rekening-name, ID — group without re-sorting.
+    counts/all_resolved always reflect the account's FULL row set — the
+    status filter only narrows display_rows, so it can never make an
+    account look "fully resolved" (or hide that it isn't) just because the
+    unresolved/ambiguous rows are filtered out of view."""
     groups = []
     for row in rows:
         if not groups or groups[-1]["rekening_id"] != row["Rekening_ID"]:
@@ -60,6 +77,7 @@ def _grouped_by_rekening(rows):
         counts = _counts(group["rows"])
         group["counts"] = counts
         group["all_resolved"] = counts["unresolved"] == 0 and counts["ambiguous"] == 0
+        group["display_rows"] = [row for row in group["rows"] if str(row["processed"]) in selected_statuses]
     return groups
 
 
@@ -88,10 +106,19 @@ def _resolve_category_id(conn, user_id: int, cat_id_raw: str, new_name_raw: str)
 
 
 @router.get("/review")
-def review_page(request: Request):
+def review_page(
+    request: Request,
+    status: List[str] = Query(default_factory=list),
+    filtered: Optional[str] = None,
+):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
+
+    # Same "hidden filtered=1 marker" pattern as the dashboard: distinguishes
+    # a deliberate all-unchecked submit from a fresh page load, which
+    # defaults to showing every status.
+    selected_statuses = set(status) if filtered is not None else set(_ALL_STATUSES)
 
     conn = get_connection()
     try:
@@ -103,7 +130,46 @@ def review_page(request: Request):
     return templates.TemplateResponse(
         request,
         "review.html",
-        {"groups": _grouped_by_rekening(rows), "counts": _counts(rows), "categories": categories},
+        {
+            "groups": _grouped_by_rekening(rows, selected_statuses),
+            "counts": _counts(rows),
+            "categories": categories,
+            "selected_statuses": selected_statuses,
+        },
+    )
+
+
+@router.post("/review/recategorize")
+def review_recategorize(request: Request):
+    """Re-run automatic categorization against ALL of this user's current
+    temp_afschrift rows, without a re-upload — see
+    app/categorization.py::recategorize_pending. Re-renders the page
+    unfiltered (showing every status) so any rows that just changed are
+    visible regardless of whatever filter was active before."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    recategorization = recategorize_pending(user["id"])
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
+        categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "review.html",
+        {
+            "groups": _grouped_by_rekening(rows),
+            "counts": _counts(rows),
+            "categories": categories,
+            "selected_statuses": set(_ALL_STATUSES),
+            "recategorization": recategorization,
+            "recategorize_ran": True,
+        },
     )
 
 
@@ -189,7 +255,13 @@ def migrate_to_afschrift(request: Request, rekening_id: int):
         return templates.TemplateResponse(
             request,
             "review.html",
-            {"groups": _grouped_by_rekening(rows), "counts": _counts(rows), "categories": categories, "error": error},
+            {
+                "groups": _grouped_by_rekening(rows),
+                "counts": _counts(rows),
+                "categories": categories,
+                "selected_statuses": set(_ALL_STATUSES),
+                "error": error,
+            },
             status_code=400,
         )
 

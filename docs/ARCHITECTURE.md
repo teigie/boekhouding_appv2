@@ -327,6 +327,36 @@ voor de SQL-bestanden en `app/categorization.py` voor de orchestratie, en
 `app/categorization_rules.py` voor de validatie/normalisatie van een
 regel's ingevoerde waarden vóór opslag.
 
+**Opnieuw proberen zonder her-upload.** Voeg je een categorie/regel toe
+*nadat* een bestand al is geüpload, dan blijft de destijds bepaalde
+uitkomst gewoon in `temp_afschrift` staan — ook een inmiddels
+achterhaalde `processed = 1` — tot iemand er iets aan doet. De knop
+"Categorisatie opnieuw proberen" op `/review`
+(`app/categorization.py::recategorize_pending`,
+`sql/categorization/recategorize_temp_afschrift.sql`) evalueert dezelfde
+regel-logica hierboven opnieuw, maar dan tegen `temp_afschrift` in plaats
+van `temp_afschrift2`, over *alle* rekeningen en *alle* rijen van de
+gebruiker tegelijk — inclusief al opgeloste rijen, niet alleen
+`processed` 0/2.
+
+Dat laatste is met opzet asymmetrisch: `processed = 1` betekent
+"opgelost", zonder onderscheid tussen automatisch en handmatig gekozen
+(zie `sql/queries/temp_afschrift/set_category.sql`) — er is geen apart
+veld dat een handmatige keuze markeert. Een opgeloste rij wordt daarom
+hier alleen ooit **gepromoveerd** naar ambigu (`processed = 2`), namelijk
+zodra een nieuw toegevoegde regel er nu óók mee overeenkomt — dat conflict
+moet zichtbaar worden, niet stilzwijgend onder de mat geveegd. Diezelfde
+rij wordt nooit terugverlaagd naar onopgelost puur omdat er nu geen
+enkele regel meer op matcht (de normale situatie voor iets dat met de
+hand is gekozen) en de gekoppelde categorie wordt nooit stilzwijgend
+verwisseld voor een andere, toevallig unieke match. Rijen die al
+`processed` 0 of 2 waren mogen wel vrij naar elke nieuwe uitkomst bewegen.
+Eén subtiliteit: `temp_afschrift` bewaart alleen `Mutatiesoort_ID`, niet
+de originele ruwe tekst uit het bestand, dus een `Mutatiesoort`-voorwaarde
+wordt hier gecontroleerd tegen elk ruw label in `mutatiesoort_mapping` dat
+naar diezelfde ID herleidt — inhoudelijk gelijkwaardig, omdat die mapping
+synonieme labels toch al tot één mutatiesoort samenvoegt.
+
 ### Fase 3 — handmatige controle
 
 Rijen met `processed = 0` of `2` blijven in `temp_afschrift` staan totdat
@@ -339,7 +369,15 @@ list_all_for_user.sql`) toont **alle** `temp_afschrift`-rijen van de
 ingelogde gebruiker — niet alleen onopgelost/ambigu, ook al opgeloste
 rijen — gegroepeerd in één tabel per Rekening (op naam, niet op ID), elk
 met een eigen opgelost/onopgelost/ambigu-telling, plus een totaaltelling
-bovenaan de pagina.
+bovenaan de pagina. Een statusfilter (checkboxes onopgelost/opgelost/
+ambigu, `?status=&filtered=1`, zelfde "verborgen `filtered`-marker"-truc
+als het dashboard) bepaalt alleen welke rijen **getoond** worden per
+tabel (`group.display_rows`) — de telling, de "is deze rekening
+klaar?"-check en dus migratie-geschiktheid gebruiken altijd de volledige,
+ongefilterde rijenset van die rekening, nooit de gefilterde weergave. Zo
+kan een rekening nooit per ongeluk "klaar" lijken (of dat verbergen)
+puur omdat de onopgeloste/ambigue rijen toevallig uit beeld gefilterd
+zijn.
 
 Categorie toewijzen kan al vanaf dit scherm: elke rij heeft een dropdown
 met alle bestaande categorieën plus een "+ nieuwe categorie…"-optie, maar
