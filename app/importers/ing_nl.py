@@ -6,6 +6,12 @@ separator), dates as an 8-digit "YYYYMMDD" string. Header:
 
 "Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";
 "Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"
+
+ING's own row order is newest-first — the top data row (right after the
+header) is the most recent transaction, the bottom row the oldest. That's
+the reverse of what BaseImporter.parse() must return (chronological
+ascending, see app/importers/base.py), so parse() reverses the rows
+before returning them.
 """
 import csv
 import io
@@ -82,4 +88,7 @@ class IngNlImporter(BaseImporter):
             except (KeyError, ValueError) as exc:
                 raise ValueError(f"Kon regel {line_no} niet verwerken: {exc}") from exc
             rows.append(row)
+        # ING lists newest-first; flip to chronological ascending (oldest
+        # first) as required by BaseImporter.parse()'s contract.
+        rows.reverse()
         return rows

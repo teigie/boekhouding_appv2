@@ -5,6 +5,44 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-18 — Fix: ING NL importer had the balance-chain row order backwards
+
+- **Bug**: `app/importers/ing_nl.py::parse()` returned rows in the CSV's own
+  file order and `BaseImporter`'s contract assumed that file order *was*
+  chronological ascending (oldest first). That assumption was wrong for
+  ING's actual "Alle transacties" export, which lists the **newest**
+  transaction first and the **oldest** last — the reverse. A real 428-row
+  export uploaded today was rejected with "Saldoketen doorbroken" (see
+  `logs/audit.log`, 2026-08-18 15:48) purely because of this — every row's
+  `Saldo_na_mutatie` was being chained against the wrong predecessor.
+- **Fix**: `BaseImporter.parse()`'s contract (`app/importers/base.py`) now
+  states explicitly that it must return chronological-ascending order
+  regardless of the source format's own native order; each importer is
+  responsible for reordering internally if needed.
+  `IngNlImporter.parse()` now does `rows.reverse()` before returning, with
+  a comment explaining why. `docs/ARCHITECTURE.md`'s Fase 1 section
+  (uploadpijplijn) updated to match, including a short note on why the old
+  assumption broke real uploads.
+- **Test fixtures**: `testdata/upload/01_batch_ok.csv`,
+  `08_batch_ok_2e_rekening.csv`, and `03_batch_unmapped_mutatiesoort.csv`
+  (the multi-row fixtures, where relative order actually matters) were
+  rewritten newest-first, matching real ING export order, so they still
+  exercise the importer's reversal instead of accidentally being "already
+  correct" in file order. `testdata/README.md` notes that its row-by-row
+  walkthrough table numbers rows chronologically (Rij 1 = oldest = the
+  *last* line in the file), not by file position.
+- **Verified** on an isolated scratch copy (schema + seed + a throwaway
+  user/Rekening pair, real dev DB/server untouched — checksum confirmed
+  unchanged before/after): uploading the corrected `01_batch_ok.csv`
+  now inserts rows in true chronological order (`ID` 1..6 = 2026-08-01
+  through 2026-08-06, checked directly against `temp_afschrift`) and is
+  **accepted**; the balance-break fixture, an exact re-upload of batch 1,
+  and the unmapped-mutatiesoort fixture are all still correctly
+  **rejected**, order-independent; the second account's batch (`08_...`)
+  accepts independently of the first. No migration needed for the real
+  dev DB — the earlier real-world rejection rolled back before ever
+  committing, so no corrupted rows exist to clean up.
+
 ### 2026-08-18 — Dashboard: month-range filtering, Rekening/categorie selection, linegraph
 
 - Date filtering is now whole calendar months only (`?start_month=&end_month=`,

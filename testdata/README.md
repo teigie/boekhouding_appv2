@@ -11,6 +11,14 @@ not guesses.
 Format: ING NL CSV (see `app/importers/ing_nl.py`) — this is what you pick
 as "ING NL (CSV export)" on `/upload`.
 
+These fixtures list rows **newest-first**, matching ING's actual export
+order — the top data row (right after the header) is the most recent
+transaction, the bottom row the oldest. `app/importers/ing_nl.py::parse()`
+reverses this to chronological order before anything downstream sees it,
+so the "Rij" numbers in the row-by-row table below refer to that
+chronological order (Rij 1 = oldest = the *last* data row in the file),
+not the file's own top-to-bottom position.
+
 ## Setup (once)
 
 1. Log in / sign up as a user — e.g. `TestUser` — with account

@@ -127,10 +127,21 @@ afschrift         <- permanent grootboek, één strikt geordende reeks per reken
 
 `app/upload.py` verwerkt het geüploade bestand (via een `BaseImporter`
 uit `app/importers/` — één per bank/exportformaat, gekozen door de
-gebruiker op `/upload`) en voegt het rij voor rij, onveranderd, toe in
-exact de volgorde waarin het in het bestand staat. `Rekening` en
-`Mutatiesoort` blijven platte tekst — er gebeurt nog geen FK-resolutie,
-dat is de taak van categorisering (fase 2).
+gebruiker op `/upload`) en voegt de rijen rij voor rij toe, in de
+volgorde die de importer teruggeeft. `Rekening` en `Mutatiesoort` blijven
+platte tekst — er gebeurt nog geen FK-resolutie, dat is de taak van
+categorisering (fase 2).
+
+**De importer garandeert chronologische volgorde (oudste eerst), niet per
+se de eigen bestandsvolgorde van de bron.** `BaseImporter.parse()` moet
+altijd oudste-eerst teruggeven, ongeacht hoe de bank het exporteert —
+alles hieronder (inclusief de saldoketen-controle) vertrouwt daarop.
+ING NL's eigen export zet juist de **nieuwste transactie bovenaan** en de
+oudste onderaan; `app/importers/ing_nl.py::parse()` draait de rijen dus
+zelf om vóór het teruggeven. Dit was eerder verkeerd aangenomen (bestand
+onveranderd doorgeven, top = oudste) — dat leidde ertoe dat een echte
+ING-export altijd als "saldoketen doorbroken" werd afgewezen, omdat de
+rijen dan in omgekeerde (nieuw-naar-oud) volgorde werden ingevoegd.
 
 **Twee foreign keys worden vóór het invoegen gecontroleerd, niet erna.**
 Beide zijn "hoort dit bestand hier wel thuis"-controles, geen

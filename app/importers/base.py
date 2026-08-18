@@ -18,9 +18,20 @@ class BaseImporter(ABC):
 
     @abstractmethod
     def parse(self, file_bytes: bytes) -> list[dict]:
-        """Parse raw file bytes into a list of row dicts, in exact file
-        order — that order is preserved downstream and must not be
-        reordered (see docs/ARCHITECTURE.md).
+        """Parse raw file bytes into a list of row dicts, in chronological
+        order — oldest transaction first, newest last. Downstream logic
+        (app/upload.py, sql/upload/check_balance_chain.sql) assumes the
+        returned order *is* chronological ascending and uses it as-is to
+        decide insertion order, so it is preserved from here on and must
+        not be reordered again later (see docs/ARCHITECTURE.md).
+
+        This is chronological order, not necessarily the source file's own
+        row order: some export formats (e.g. ING NL) list the newest
+        transaction first and the oldest last, so implementations must
+        reverse the rows themselves here if the source's native order
+        isn't already oldest-first. Getting this wrong doesn't silently
+        corrupt data — the balance-chain check downstream will reject the
+        whole batch — but it's still this method's job to get right.
 
         Each dict must have exactly these keys, matching temp_afschrift2's
         columns:
