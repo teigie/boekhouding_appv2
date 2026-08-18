@@ -5,6 +5,76 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-18 — Idle auto-shutdown for the launcher scripts
+
+- The server can now shut itself down after a period of no HTTP traffic —
+  scoped specifically to the "launcher" way of starting the app
+  (`start_app.sh`/`.bat`/`.ps1`), not to `python run.py` during
+  development. Considered and rejected "shut down when the browser tab
+  closes": this app is server-rendered, full-page-navigation (Jinja2), so
+  every internal link click fires the same `beforeunload`/`pagehide`
+  events a real tab close would — there's no reliable way to tell those
+  apart client-side, making idle time the only robust signal.
+- `run.py` now branches on `BOEKHOUDING_RELOAD` (default unset/"1" =
+  today's `uvicorn.run(..., reload=True)`, unchanged). Set to `"0"` (what
+  the launcher scripts export) and it instead builds `uvicorn.Config` +
+  `uvicorn.Server` directly and stashes the server on
+  `app.state.uvicorn_server` — the hook the idle-shutdown watchdog needs
+  to flip `should_exit` and trigger a normal graceful shutdown. `reload`
+  mode has no such single, addressable server instance (the actual app
+  runs in a supervised subprocess), so idle-shutdown is a deliberate
+  no-op there — verified: default `python run.py` stays up indefinitely
+  with zero traffic. Also added `BOEKHOUDING_PORT` (default unchanged,
+  8000) purely so this could be tested on a throwaway port without
+  touching the real dev server.
+- New `app/idle_shutdown.py`: `record_activity()` (called from the
+  existing `log_requests` middleware in `app/main.py` on every request)
+  resets a last-activity timestamp on `app.state`; a `watch_idle()`
+  background task (started from the FastAPI `lifespan`, cancelled on
+  shutdown) polls every 15s and sets `should_exit = True` once idle time
+  crosses `BOEKHOUDING_IDLE_TIMEOUT_MINUTES` (env var, default 30 for the
+  launcher scripts, `0` = disabled). Logged in `logs/app.log` same as any
+  other startup/shutdown event.
+- Verified end-to-end against an isolated scratch copy of the app (own
+  DB, alternate port): a launcher-mode server left idle self-terminates
+  gracefully within one ~15s check cycle past the configured timeout;
+  periodic requests keep resetting the clock and keep it alive; default
+  reload-mode `python run.py` is completely unaffected (confirmed alive
+  after 20+ idle seconds). The real dev DB/server were never touched by
+  any of this testing.
+
+### 2026-08-18 — Windows launcher
+
+- Added `start_app.ps1` (the launcher logic, ported from `start_app.sh`:
+  poll `http://127.0.0.1:8000`, start `.venv\Scripts\python.exe run.py`
+  in the background if it's not already up, wait for it, open the
+  default browser) and `start_app.bat` (a double-clickable entry point
+  that just invokes the `.ps1`, since `.ps1` files don't run on
+  double-click by default). Background process output goes to
+  `logs\launcher-stdout.log`/`logs\launcher-stderr.log`. No app code
+  changes were needed — `app/config.py` already resolves every path via
+  `pathlib`, and `run.py`'s only dependency (`uvicorn[standard]`) already
+  skips its Unix-only `uvloop` extra on Windows via its own packaging
+  markers. README's "Snelkoppeling om te starten" section now documents
+  both platforms, including the standard Windows "Verzenden naar →
+  Bureaublad" way to turn `start_app.bat` into a desktop shortcut.
+
+### 2026-08-18 — One-click desktop launcher (Linux)
+
+- Added `start_app.sh`: starts `run.py` in the background if it isn't
+  already running (checked by polling `http://127.0.0.1:8000`), waits for
+  it to come up, then opens it in the default browser via `xdg-open`
+  (falls back to `gio open`). Safe to click repeatedly — if the server's
+  already up it just (re)opens the browser instead of starting a second
+  instance. Launcher output goes to `logs/launcher.log`; the app's own
+  logs are unaffected.
+- Added `boekhouding.desktop` (freedesktop `.desktop` entry, points at
+  `start_app.sh` by absolute path) so the launcher can be dropped onto
+  the GNOME desktop and/or the applications menu as a real clickable
+  shortcut — see the new "Snelkoppeling om te starten" section in
+  `README.md` for the copy/`chmod` steps and the one-time GNOME "trust
+  this launcher" prompt.
+
 ### 2026-08-17 — Dedicated rule-edit page
 
 - Replaced the profile page's inline per-column "+ keyword" mini-forms

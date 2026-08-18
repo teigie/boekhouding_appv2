@@ -46,6 +46,64 @@ de SQLite-database automatisch aangemaakt op `data/boekhouding.db` vanuit
 `sql/schema.sql` + `sql/seed_data.sql` — niets om handmatig te
 configureren.
 
+### Snelkoppeling om te starten
+
+Na de installatie hierboven kan de app ook met één klik gestart worden,
+zonder terminal. Beide varianten doen hetzelfde: starten de server op de
+achtergrond (of merken op dat hij al draait) en openen daarna automatisch
+de browser op http://127.0.0.1:8000.
+
+Gestart via deze snelkoppelingen sluit de server zichzelf ook weer af na
+**30 minuten zonder verkeer** — handig omdat je hem niet handmatig hoeft
+af te sluiten. (Reageren op "browsertabblad gesloten" kan niet
+betrouwbaar: elke interne link in de app is óók een paginanavigatie, dus
+er is geen manier om dat te onderscheiden van écht wegklikken — vandaar
+inactiviteit als signaal.) Dit geldt niet voor gewoon `python run.py`
+tijdens ontwikkelen — die blijft ongewijzigd draaien tot je hem zelf
+stopt. Zelf instellen kan via een omgevingsvariabele vóór het starten van
+de snelkoppeling, bijvoorbeeld 10 minuten, of `0` om uit te schakelen:
+
+```bash
+# Linux, vóór ./start_app.sh:
+export BOEKHOUDING_IDLE_TIMEOUT_MINUTES=10
+
+# Windows, in PowerShell vóór start_app.bat:
+$env:BOEKHOUDING_IDLE_TIMEOUT_MINUTES = "10"
+```
+
+**Linux:**
+
+```bash
+./start_app.sh
+```
+
+Om er een echte snelkoppeling van te maken (bureaublad + toepassingenmenu):
+
+```bash
+cp boekhouding.desktop ~/Desktop/
+cp boekhouding.desktop ~/.local/share/applications/
+chmod +x ~/Desktop/boekhouding.desktop ~/.local/share/applications/boekhouding.desktop
+```
+
+`boekhouding.desktop` verwijst naar `start_app.sh` via een absoluut pad,
+dus pas dat pad aan als de map ooit verplaatst wordt. Op het bureaublad
+kan GNOME de eerste keer "Vertrouw je deze toepassing?" vragen — kies
+"Toestaan" (of via rechtermuisknop op het icoon → Eigenschappen →
+Toestaan als programma).
+
+**Windows:**
+
+Dubbelklik `start_app.bat` (dit roept `start_app.ps1` aan — vereist
+PowerShell, standaard aanwezig op Windows 10/11). Verwacht dezelfde
+`.venv`-map als bij de installatiestappen hierboven, dus met
+`.venv\Scripts\python.exe` erin.
+
+Om een snelkoppeling op het bureaublad te zetten: rechtermuisklik op
+`start_app.bat` → **Verzenden naar** → **Bureaublad (snelkoppeling
+maken)**. De snelkoppeling werkt zolang hij naar dit bestand blijft
+wijzen, ook als je hem hernoemt of van icoon verandert (rechtermuisklik
+→ Eigenschappen → Pictogram wijzigen).
+
 Het databasebestand en de logs zijn gitignored (zie `data/`, `logs/`) —
 ze worden lokaal gegenereerd en nooit gecommit, zodat elke kloon start
 vanuit dezelfde bijgehouden bron.

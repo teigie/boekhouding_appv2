@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Boekhouding
+Comment=Start de boekhouding-app en open hem in de browser
+Exec=/home/reinald-jansen/Documenten/git/boekhouding_appv2/boekhouding_appv2/start_app.sh
+Icon=x-office-spreadsheet
+Terminal=false
+Categories=Office;Finance;

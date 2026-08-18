@@ -3,6 +3,8 @@
 Wires up logging, the session/login system, static files, and the app's
 routers. See docs/ARCHITECTURE.md for the intended pipeline.
 """
+import asyncio
+import contextlib
 import time
 from contextlib import asynccontextmanager
 
@@ -12,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import BASE_DIR
 from app.db import init_db
+from app.idle_shutdown import record_activity, watch_idle
 from app.logging_config import get_app_logger, setup_logging
 from app.routes import accounts, auth, categories, dashboard, review, upload, user
 from app.session import get_or_create_session_secret
@@ -24,7 +27,11 @@ log = get_app_logger()
 async def lifespan(app: FastAPI):
     log.info("Starting up")
     init_db()
+    idle_task = asyncio.create_task(watch_idle(app))
     yield
+    idle_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await idle_task
     log.info("Shutting down")
 
 
@@ -45,6 +52,7 @@ app.include_router(user.router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    record_activity(request)
     start = time.monotonic()
     response = await call_next(request)
     duration_ms = (time.monotonic() - start) * 1000

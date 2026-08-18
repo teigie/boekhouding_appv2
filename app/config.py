@@ -2,6 +2,7 @@
 the project runs the same regardless of where it's cloned to or which
 machine it's on.
 """
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,3 +20,10 @@ SESSION_SECRET_PATH = DATA_DIR / ".session_secret"
 
 DATA_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
+
+# Auto-afsluiten na inactiviteit — voor de "snelkoppeling"-manier van
+# starten (start_app.sh/.bat), niet voor `python run.py` tijdens
+# ontwikkelen: dat blijft ongewijzigd draaien met reload=True. Zie
+# app/idle_shutdown.py. 0 (de default) = uitgeschakeld.
+IDLE_TIMEOUT_MINUTES = float(os.environ.get("BOEKHOUDING_IDLE_TIMEOUT_MINUTES", "0"))
+IDLE_TIMEOUT_SECONDS = IDLE_TIMEOUT_MINUTES * 60
