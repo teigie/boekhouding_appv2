@@ -11,6 +11,11 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+
+## [0.0.31] - 2026-08-19 — Updatemechanisme: versiebeheer + update-banner
+
+- **Nieuw**: Test is goed gegaan met versiecontrole. Nu test met failure.
+
 ## [0.0.31] - 2026-08-19 — Updatemechanisme: versiebeheer + update-banner
 
 - **Nieuw**: Test met update versiecontrol.
