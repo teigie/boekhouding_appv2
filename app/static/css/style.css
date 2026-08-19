@@ -389,7 +389,8 @@ summary {
   margin: 0;
 }
 
-.preset-btn {
+.preset-btn,
+.checkbox-toggle-btn {
   font: inherit;
 }
 

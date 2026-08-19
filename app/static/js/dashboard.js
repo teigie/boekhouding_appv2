@@ -16,6 +16,21 @@
     });
   }
 
+  // "Alles selecteren"/"Alles deselecteren" boven de categorieën- en
+  // grafieklijnen-checkboxes (data-check-group is de checkbox-naam, dus
+  // dit werkt voor elke checkbox-groep die zo'n knoppenpaar krijgt) — zet
+  // alleen de checkboxen zelf om, submit niets: de gebruiker klikt zelf
+  // nog op "Filteren" zodra de selectie klopt.
+  document.querySelectorAll(".checkbox-toggle-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var checked = btn.dataset.checkAction === "all";
+      var selector = 'input[type="checkbox"][name="' + btn.dataset.checkGroup + '"]';
+      document.querySelectorAll(selector).forEach(function (box) {
+        box.checked = checked;
+      });
+    });
+  });
+
   // "Per categorie": elke categorierij is klikbaar (en met Enter/Spatie
   // bedienbaar, vandaar tabindex + role="button" in index.html) en
   // toont/verbergt de bijbehorende detailrij met onderliggende
