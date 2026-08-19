@@ -27,7 +27,10 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   verwijderen" confirmation warning), delete-rekening (the last step of
   deleting an account, after its temp_afschrift/afschrift rows — see
   `temp_afschrift/delete_for_rekening.sql` and
-  `afschrift/delete_for_rekening.sql` below).
+  `afschrift/delete_for_rekening.sql` below), latest-entry-for-user (the
+  account's single most recent statement, from temp_afschrift if it has
+  any pending rows at all — otherwise afschrift — shown next to each
+  Rekening on the profile page).
 - `mutatiesoorten/` — find-by-name (used by the upload pipeline's
   pre-insert Mutatiesoort gate, and by categorization to resolve
   `Mutatiesoort_ID`).

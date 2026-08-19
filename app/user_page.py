@@ -14,6 +14,9 @@ _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql"
 _COUNT_REKENING_DATA_SQL = (
     SQL_DIR / "queries" / "rekeningen" / "count_data_for_user.sql"
 ).read_text(encoding="utf-8")
+_LATEST_ENTRY_SQL = (
+    SQL_DIR / "queries" / "rekeningen" / "latest_entry_for_user.sql"
+).read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
@@ -52,10 +55,13 @@ def _group_regels_by_category(rows) -> dict:
 def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     """Rekeningen — each annotated with data_count, how many
     temp_afschrift + afschrift rows currently belong to it, shown in the
-    "Rekening verwijderen" confirmation warning (app/static/js/user.js) —
-    plus categories with their categorization rules nested underneath,
-    plus the suggestion chips still worth offering (names the user
-    doesn't already have, case-insensitively)."""
+    "Rekening verwijderen" confirmation warning (app/static/js/user.js),
+    and latest_entry, the single most recent statement across both
+    temp_afschrift and afschrift (sql/queries/rekeningen/
+    latest_entry_for_user.sql — None if the account has no rows at all
+    yet) — plus categories with their categorization rules nested
+    underneath, plus the suggestion chips still worth offering (names the
+    user doesn't already have, case-insensitively)."""
     rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user_id}).fetchall()
     rekeningen_out = [
         {
@@ -65,6 +71,9 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
             "data_count": conn.execute(
                 _COUNT_REKENING_DATA_SQL, {"rekening_id": r["ID"], "user_id": user_id}
             ).fetchone()["row_count"],
+            "latest_entry": conn.execute(
+                _LATEST_ENTRY_SQL, {"rekening_id": r["ID"], "user_id": user_id}
+            ).fetchone(),
         }
         for r in rekeningen
     ]

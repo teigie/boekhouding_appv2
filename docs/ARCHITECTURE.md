@@ -61,6 +61,22 @@ verstuurd wordt, toont de profielpagina precies hoeveel rijen dat raakt
 JavaScript-bevestiging (`app/static/js/user.js`) — dat is de enige rem;
 er is geen ongedaan-maken.
 
+Naast elke rekening toont de profielpagina ook haar laatste boeking
+(`sql/queries/rekeningen/latest_entry_for_user.sql`) — zodat in één
+oogopslag te zien is wat er voor die rekening bekend is, zonder naar
+`/review` of het dashboard te hoeven. Dit kijkt in zowel `temp_afschrift`
+als `afschrift`: heeft `temp_afschrift` nog wachtende rijen voor deze
+rekening, dan is de rij met het hoogste `ID` daar altijd de echte laatste
+— nooit `afschrift`, en nooit op basis van `Datum` vergeleken. Dat volgt
+direct uit migratie's alles-of-niets-regel (Fase 4 hieronder): zolang er
+nog een wachtende rij is, is er nooit gemigreerd, dus is de hele
+`temp_afschrift`-achterstand van die rekening per definitie recenter dan
+wat al in `afschrift` staat, ook al zou een individuele `Datum`-vergelijking
+toevallig anders uitkomen. Zo'n rij krijgt een "nog niet gemigreerd"-label
+in de UI; is er geen `temp_afschrift`-rij, dan komt de laatste boeking
+gewoon uit `afschrift`. Geen rijen in beide tabellen → "nog geen
+statements geüpload".
+
 Uitgavencategorieën (`afschrift_categorien`) en hun categoriseringsregels
 (`afschrift_cat_regels`, zie "Fase 2" hieronder) zijn op dezelfde manier
 per gebruiker: elke gebruiker bouwt en beheert zijn eigen lijst, ook op de

@@ -10,8 +10,23 @@
     {% if rekeningen %}
       <ul>
         {% for r in rekeningen %}
-          <li class="table-actions" style="justify-content: space-between;">
-            <span>{{ r["name"] }} <span class="muted">(toegevoegd op {{ r["creation_date"] | eu_datetime }})</span></span>
+          <li class="table-actions" style="justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div>{{ r["name"] }} <span class="muted">(toegevoegd op {{ r["creation_date"] | eu_datetime }})</span></div>
+              <div class="muted" style="margin-top: 0.25rem;">
+                {% if r.latest_entry %}
+                  Laatste boeking: {{ r.latest_entry["Datum"] | eu_date }} — {{ r.latest_entry["Naam"] }}
+                  <span class="{{ 'amount-af' if r.latest_entry['Af_bij'] == 'Af' else 'amount-bij' }}">
+                    {{ "−" if r.latest_entry["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(r.latest_entry["Bedrag_eur"]) }}
+                  </span>
+                  {% if r.latest_entry["bron"] == "temp_afschrift" %}
+                    <span class="chip" style="margin-left: 0.4rem;">nog niet gemigreerd</span>
+                  {% endif %}
+                {% else %}
+                  Nog geen statements geüpload voor deze rekening.
+                {% endif %}
+              </div>
+            </div>
             <form method="post" action="/accounts/{{ r['ID'] }}/delete" class="inline-form js-confirm-delete-rekening"
                   data-rekening-name="{{ r['name'] }}" data-count="{{ r['data_count'] }}">
               <button type="submit" class="link-button">Verwijderen</button>

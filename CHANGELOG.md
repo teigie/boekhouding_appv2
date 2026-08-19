@@ -11,7 +11,29 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.34] - 2026-08-19 — Profielpagina: laatste boeking per rekening
 
+- Elke rekening op de profielpagina (`/user/{username}`) toont nu ook
+  haar laatste boeking (datum, naam, bedrag), zodat in één oogopslag
+  duidelijk is wat het meest recente is — inclusief nog niet gemigreerde
+  `temp_afschrift`-rijen, herkenbaar aan een "nog niet gemigreerd"-label.
+  Nieuwe query `sql/queries/rekeningen/latest_entry_for_user.sql`:
+  bepaalt de "laatste" boeking op basis van welke tabel de rij in staat
+  (`temp_afschrift` wint áltijd als de rekening daar nog wachtende rijen
+  heeft), niet op basis van `Datum` — dat volgt direct uit migratie's
+  alles-of-niets-regel (Fase 4): zolang er ook maar één rij wacht, is er
+  nog niet gemigreerd, dus is de hele wachtrij per definitie recenter dan
+  wat al in `afschrift` staat, ook al zou een losse datumvergelijking
+  toevallig anders uitkomen. `app/user_page.py::load_user_page_data`
+  voegt dit als `latest_entry` toe aan elke rekening (`None` = nog geen
+  enkele statement).
+- **Geverifieerd** op een geïsoleerde scratch-kopie met drie rekeningen:
+  één zonder data (toont "nog geen statements geüpload"), één met alleen
+  `afschrift`-rijen (toont terecht de nieuwste daarvan), en één met een
+  `afschrift`-rij met een latere kalenderdatum náást een wachtende
+  `temp_afschrift`-rij met een eerdere datum — bevestigd dat de wachtende
+  rij toch als "laatste" getoond wordt (met het label), precies zoals
+  bedoeld op basis van tabel-prioriteit in plaats van datum.
 
 ## [0.0.33] - 2026-08-19 — Updatemechanisme: versiebeheer + update-banner
 
