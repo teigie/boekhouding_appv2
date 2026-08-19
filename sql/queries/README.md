@@ -62,6 +62,10 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   real month bounds instead of an arbitrary epoch range. `delete_for_rekening.sql`
   is the one place this ledger is ever deleted from — the second step of
   deleting an account, right after `temp_afschrift/delete_for_rekening.sql`.
+  `list_for_user.sql` is `monthly_totals_for_user.sql`'s unaggregated
+  counterpart, same user/date-range scoping — individual rows instead of
+  monthly sums, feeding the "Per categorie" table's per-category expanded
+  statement list.
 - `regels/` — a user's own categorization rules: `list_for_user.sql`
   nests every rule (rule → column → keywords) for the profile page's
   read-only summary; `find_for_user.sql` is the ownership check for the

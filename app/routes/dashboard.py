@@ -13,6 +13,14 @@ migrated yet, see sql/migration/README.md).
 Rekening/categorie filtering happens in Python, not SQL, on purpose —
 see app/dashboard_chart.py's module docstring and
 sql/queries/afschrift/monthly_totals_for_user.sql.
+
+Each row of the "Per categorie" table can be expanded (index.html +
+app/static/js/dashboard.js) to show the individual afschrift rows its
+totals were summed from — a separate, unaggregated query
+(sql/queries/afschrift/list_for_user.sql) over the same date range, run
+through the exact same Rekening/categorie selection filtering as the
+totals themselves, so what's shown underneath always matches what's
+added up above it.
 """
 import json
 from datetime import date
@@ -39,6 +47,7 @@ from app.templating import templates
 router = APIRouter()
 
 _MONTHLY_TOTALS_SQL = (SQL_DIR / "queries" / "afschrift" / "monthly_totals_for_user.sql").read_text(encoding="utf-8")
+_LIST_AFSCHRIFT_SQL = (SQL_DIR / "queries" / "afschrift" / "list_for_user.sql").read_text(encoding="utf-8")
 _DATE_BOUNDS_SQL = (SQL_DIR / "queries" / "afschrift" / "date_bounds_for_user.sql").read_text(encoding="utf-8")
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
@@ -109,14 +118,13 @@ def home(
         if range_end < range_start:
             range_start, range_end = range_end, range_start
 
-        rows = conn.execute(
-            _MONTHLY_TOTALS_SQL,
-            {
-                "user_id": user["id"],
-                "start": range_start.isoformat(),
-                "end": month_end(range_end).isoformat(),
-            },
-        ).fetchall()
+        range_params = {
+            "user_id": user["id"],
+            "start": range_start.isoformat(),
+            "end": month_end(range_end).isoformat(),
+        }
+        rows = conn.execute(_MONTHLY_TOTALS_SQL, range_params).fetchall()
+        statement_rows = conn.execute(_LIST_AFSCHRIFT_SQL, range_params).fetchall()
     finally:
         conn.close()
 
@@ -135,6 +143,10 @@ def home(
         r for r in rows
         if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
     ]
+    filtered_statements = [
+        r for r in statement_rows
+        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
+    ]
 
     totaal_inkomsten = sum(r["totaal_bij"] for r in filtered_rows)
     totaal_uitgaven = sum(r["totaal_af"] for r in filtered_rows)
@@ -142,9 +154,21 @@ def home(
     per_cat: dict[str, dict] = {}
     for r in filtered_rows:
         key = _cat_key(r["cat_id"])
-        entry = per_cat.setdefault(key, {"category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0})
+        entry = per_cat.setdefault(
+            key, {"key": key, "category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0, "statements": []}
+        )
         entry["totaal_bij"] += r["totaal_bij"]
         entry["totaal_af"] += r["totaal_af"]
+    # Statements are gathered from a separate, unaggregated query
+    # (list_for_user.sql) — same date-range/Rekening/category filtering
+    # as the totals above, so each category's expanded list on the
+    # dashboard always matches exactly what its totals were summed from.
+    for r in filtered_statements:
+        key = _cat_key(r["cat_id"])
+        entry = per_cat.setdefault(
+            key, {"key": key, "category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0, "statements": []}
+        )
+        entry["statements"].append(r)
     categorie_rows = sorted(per_cat.values(), key=lambda e: (-e["totaal_af"], -e["totaal_bij"]))
 
     months = month_range(range_start, range_end)

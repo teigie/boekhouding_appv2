@@ -131,6 +131,7 @@
   <section class="card" style="margin-top: 1.5rem;">
     <h2>Per categorie</h2>
     {% if categorie_rows %}
+      <p class="muted" style="margin-top: 0;">Klik op een categorie om de onderliggende statements te zien.</p>
       <div class="table-scroll">
         <table>
           <thead>
@@ -142,10 +143,44 @@
           </thead>
           <tbody>
             {% for c in categorie_rows %}
-              <tr>
-                <td>{{ c["category"] }}</td>
+              <tr class="category-row" data-cat-target="cat-statements-{{ c.key }}" tabindex="0" role="button" aria-expanded="false">
+                <td><span class="category-chevron">▸</span> {{ c["category"] }}</td>
                 <td class="col-amount amount-bij">€ {{ "%.2f"|format(c["totaal_bij"]) }}</td>
                 <td class="col-amount amount-af">€ {{ "%.2f"|format(c["totaal_af"]) }}</td>
+              </tr>
+              <tr class="category-detail-row" id="cat-statements-{{ c.key }}" hidden>
+                <td colspan="3">
+                  {% if c.statements %}
+                    <div class="table-scroll">
+                      <table class="category-statements">
+                        <thead>
+                          <tr>
+                            <th>Datum</th>
+                            <th>Rekening</th>
+                            <th>Naam</th>
+                            <th>Mededeling</th>
+                            <th class="col-amount">Bedrag</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for s in c.statements %}
+                            <tr>
+                              <td>{{ s["Datum"] | eu_date }}</td>
+                              <td>{{ s["rekening_name"] }}</td>
+                              <td>{{ s["Naam"] }}</td>
+                              <td class="col-wrap">{{ s["Mededeling"] or "" }}</td>
+                              <td class="col-amount {{ 'amount-af' if s['Af_bij'] == 'Af' else 'amount-bij' }}">
+                                {{ "−" if s["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(s["Bedrag_eur"]) }}
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  {% else %}
+                    <p class="muted" style="margin: 0.25rem 0;">Geen statements voor deze categorie in deze periode.</p>
+                  {% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

@@ -510,6 +510,21 @@ de rest van de theming). Hover toont een crosshair + tooltip met alle
 zichtbare lijnen op die maand (`app/static/js/dashboard.js`); de
 onderliggende cijfers staan ook gewoon in de categorietabel eronder.
 
+Elke rij van die categorietabel is uitklapbaar: erop klikken (of Enter/
+Spatie, `app/static/js/dashboard.js`) toont een geneste tabel met de
+individuele `afschrift`-rijen waaruit die categorie's totaal is
+opgeteld — zo is meteen te zien hoe een bedrag tot stand komt, zonder
+apart naar `/review` of de ruwe data te hoeven. Die rijen komen uit een
+eigen, niet-geaggregeerde query (`sql/queries/afschrift/list_for_user.sql`,
+het ongegroepeerde tegenhanger van `monthly_totals_for_user.sql` met
+dezelfde `:user_id`/`:start`/`:end`-scoping) die in Python door precies
+dezelfde Rekening-/categorieselectie gefilterd wordt als de totalen zelf
+(`app/routes/dashboard.py::home`) — de uitgeklapte lijst kan dus nooit
+uit de pas lopen met het bedrag erboven. Beide rijen (samenvatting +
+detail) staan altijd server-side gerenderd in de pagina; de JavaScript
+schakelt alleen het `hidden`-attribuut van de detailrij om, er wordt
+niets nagevraagd.
+
 ## Logging
 
 Twee gescheiden logs (`app/logging_config.py`), beide roterend en

@@ -5,6 +5,28 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-19 — Dashboard: expandable "Per categorie" rows
+
+- Each row of the dashboard's "Per categorie" table can now be clicked
+  (or activated with Enter/Space) to expand a nested table of the
+  individual `afschrift` statements that row's Inkomsten/Uitgaven totals
+  were summed from — so a total can be traced back to what actually
+  makes it up, without leaving the dashboard. New query
+  `sql/queries/afschrift/list_for_user.sql`, the unaggregated counterpart
+  of `monthly_totals_for_user.sql` (same `:user_id`/`:start`/`:end`
+  scoping, individual rows instead of monthly sums), run through the
+  exact same Python-side Rekening/categorie selection filtering as the
+  totals themselves (`app/routes/dashboard.py::home`) — the expanded
+  list can never disagree with the total above it. Both the summary and
+  detail row are server-rendered up front; `app/static/js/dashboard.js`
+  only toggles the detail row's `hidden` attribute, no extra request.
+- **Verified** on an isolated scratch copy: seeded statements across two
+  categories plus an uncategorized one, one of them dated outside the
+  filtered month — confirmed each category's expanded rows exactly match
+  what its totals add up to, the out-of-range row never appears,
+  unchecking the account empties the whole table, and selecting a single
+  category shows only its own expand target.
+
 ### 2026-08-19 — Rekening verwijderen + docs cleanup
 
 - **New**: an account (`Rekening`) can now be deleted from the profile

@@ -241,6 +241,28 @@ tbody tr:hover {
 .amount-af { color: #d64545; }
 .amount-bij { color: #2a9d5c; }
 
+.category-row {
+  cursor: pointer;
+}
+
+.category-chevron {
+  display: inline-block;
+  width: 1em;
+  transition: transform 0.15s ease;
+}
+
+.category-row[aria-expanded="true"] .category-chevron {
+  transform: rotate(90deg);
+}
+
+.category-detail-row td {
+  padding: 0.75rem;
+}
+
+.category-statements {
+  font-size: 0.85rem;
+}
+
 .category-cell {
   white-space: nowrap;
 }
