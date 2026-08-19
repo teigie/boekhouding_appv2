@@ -65,7 +65,11 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   `list_for_user.sql` is `monthly_totals_for_user.sql`'s unaggregated
   counterpart, same user/date-range scoping — individual rows instead of
   monthly sums, feeding the "Per categorie" table's per-category expanded
-  statement list.
+  statement list. `export_for_user.sql` is a second unaggregated query,
+  one step further: every afschrift column (not just the few
+  `list_for_user.sql` needs for display), with every foreign key
+  (Rekening, Mutatiesoort, categorie) resolved to its name — feeds the
+  dashboard's "Exporteren naar CSV" (`app/routes/dashboard.py::export_csv`).
 - `regels/` — a user's own categorization rules: `list_for_user.sql`
   nests every rule (rule → column → keywords) for the profile page's
   read-only summary; `find_for_user.sql` is the ownership check for the

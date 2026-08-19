@@ -36,3 +36,20 @@ def format_month_nl(value: Optional[str]) -> str:
         return ""
     year, month = value.split("-")
     return f"{_MAAND_NL[int(month) - 1]} {year}"
+
+
+def format_amount_nl(value: float) -> str:
+    """Canonical numeric value -> Dutch-formatted amount string ('.' for
+    thousands, ',' for decimals, e.g. 1234.5 -> "1.234,50") — the reverse
+    of app/categorization_rules.py::_parse_dutch_amount. Used by the
+    dashboard's CSV export (app/routes/dashboard.py::export_csv): a comma
+    decimal only reads as numeric in a Dutch-locale spreadsheet, a dot
+    would show up as text."""
+    sign = "-" if value < 0 else ""
+    whole, _, frac = f"{abs(value):.2f}".partition(".")
+    groups = []
+    while len(whole) > 3:
+        groups.insert(0, whole[-3:])
+        whole = whole[:-3]
+    groups.insert(0, whole)
+    return f"{sign}{'.'.join(groups)},{frac}"

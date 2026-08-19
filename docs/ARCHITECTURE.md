@@ -525,6 +525,23 @@ detail) staan altijd server-side gerenderd in de pagina; de JavaScript
 schakelt alleen het `hidden`-attribuut van de detailrij om, er wordt
 niets nagevraagd.
 
+Onder die tabel staat "Exporteren naar CSV" (`app/routes/dashboard.py::export_csv`,
+`GET /export`), die exact dezelfde selectie — rekeningen, categorieën,
+periode — als een op zichzelf staand CSV-bestand downloadt. De link zelf
+wordt server-side opgebouwd uit de huidige request (`_export_url`), dus
+hij verwijst altijd naar precies wat er op dat moment op de pagina te
+zien is, nooit naar een apart te kiezen exportfilter. De onderliggende
+query (`sql/queries/afschrift/export_for_user.sql`) lost, in
+tegenstelling tot alle andere queries op deze pagina, elke foreign key
+(Rekening, Mutatiesoort, categorie) meteen op tot zijn naam in plaats van
+de rauwe ID — een geëxporteerd bestand moet op zichzelf leesbaar zijn
+buiten de app, waar een interne ID niets betekent. Het bestand is
+`;`-gescheiden met Nederlands genoteerde bedragen (`,` als decimaalteken,
+`app/formatting.py::format_amount_nl`, de omgekeerde bewerking van
+`app/categorization_rules.py::_parse_dutch_amount`) — bewust gecombineerd,
+want een spreadsheet met Nederlandse landinstelling verwacht `,` als
+decimaalteken en dus `;` als veldscheiding, niet `,`.
+
 ## Logging
 
 Twee gescheiden logs (`app/logging_config.py`), beide roterend en

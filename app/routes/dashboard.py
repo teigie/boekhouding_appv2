@@ -21,13 +21,25 @@ totals were summed from — a separate, unaggregated query
 through the exact same Rekening/categorie selection filtering as the
 totals themselves, so what's shown underneath always matches what's
 added up above it.
+
+"Exporteren naar CSV" (below the "Per categorie" table) downloads the
+same selection as a standalone CSV — every afschrift column for exactly
+the Rekeningen/categorieën/period currently chosen, with foreign keys
+(Rekening, Mutatiesoort, categorie) resolved to their names rather than
+left as IDs, since the file is meant to be read outside the app. ';'
+field delimiter with Dutch-formatted (comma-decimal) amounts — the
+standard Dutch/Excel-NL CSV pairing (app/formatting.py::format_amount_nl).
+See export_csv below and sql/queries/afschrift/export_for_user.sql.
 """
+import csv
+import io
 import json
 from datetime import date
 from typing import List, Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from app.config import SQL_DIR
 from app.dashboard_chart import (
@@ -41,6 +53,7 @@ from app.dashboard_chart import (
     parse_month,
 )
 from app.db import get_connection
+from app.formatting import format_amount_nl
 from app.session import require_login
 from app.templating import templates
 
@@ -48,6 +61,7 @@ router = APIRouter()
 
 _MONTHLY_TOTALS_SQL = (SQL_DIR / "queries" / "afschrift" / "monthly_totals_for_user.sql").read_text(encoding="utf-8")
 _LIST_AFSCHRIFT_SQL = (SQL_DIR / "queries" / "afschrift" / "list_for_user.sql").read_text(encoding="utf-8")
+_EXPORT_AFSCHRIFT_SQL = (SQL_DIR / "queries" / "afschrift" / "export_for_user.sql").read_text(encoding="utf-8")
 _DATE_BOUNDS_SQL = (SQL_DIR / "queries" / "afschrift" / "date_bounds_for_user.sql").read_text(encoding="utf-8")
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
@@ -66,6 +80,47 @@ def _default_month_range(today: date) -> tuple[date, date]:
     """Last 6 months (incl. the current one) — a single month default
     would make the linegraph a single dot, which defeats its purpose."""
     return add_months(today.replace(day=1), -5), today.replace(day=1)
+
+
+def _resolve_month_range(today: date, start_month: Optional[str], end_month: Optional[str]) -> tuple[date, date]:
+    """Shared by home() and export_csv(): turns the raw start_month/
+    end_month query params into an ordered (start, end) pair of
+    first-of-month dates, falling back to the default 6-month window for
+    a missing/invalid value on either side."""
+    default_start, default_end = _default_month_range(today)
+    range_start = parse_month(start_month, default_start)
+    range_end = parse_month(end_month, default_end)
+    if range_end < range_start:
+        range_start, range_end = range_end, range_start
+    return range_start, range_end
+
+
+def _resolve_selected_ids(rekeningen, categorieen, rekening_ids, cat_ids, filtered: Optional[str]) -> tuple[set, set]:
+    """Shared by home() and export_csv(): turns the raw rekening_ids/
+    cat_ids query params into concrete selected-ID sets, defaulting to
+    "everything" only on a fresh, unfiltered request — see the "hidden
+    filtered=1 marker" note on home() below."""
+    all_rekening_ids = {str(r["ID"]) for r in rekeningen}
+    all_cat_ids = {_NONE_CAT_KEY} | {str(c["ID"]) for c in categorieen}
+    is_filtered = filtered is not None
+    selected_rekening_ids = set(rekening_ids) if is_filtered else set(all_rekening_ids)
+    selected_cat_ids = set(cat_ids) if is_filtered else set(all_cat_ids)
+    return selected_rekening_ids, selected_cat_ids
+
+
+def _export_url(range_start: date, range_end: date, selected_rekening_ids, selected_cat_ids) -> str:
+    """Builds the "Exporteren naar CSV" link's URL from the current
+    request's already-resolved period/selection, so the export always
+    matches exactly what's shown on the page it's linked from — never a
+    separately-chosen export filter."""
+    params = [
+        ("start_month", f"{range_start.year:04d}-{range_start.month:02d}"),
+        ("end_month", f"{range_end.year:04d}-{range_end.month:02d}"),
+        ("filtered", "1"),
+    ]
+    params += [("rekening_ids", v) for v in sorted(selected_rekening_ids)]
+    params += [("cat_ids", v) for v in sorted(selected_cat_ids)]
+    return "/export?" + urlencode(params)
 
 
 def _build_presets(today: date, data_bounds: tuple[Optional[str], Optional[str]]) -> list[dict]:
@@ -112,11 +167,7 @@ def home(
         bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user["id"]}).fetchone()
 
         today = date.today()
-        default_start, default_end = _default_month_range(today)
-        range_start = parse_month(start_month, default_start)
-        range_end = parse_month(end_month, default_end)
-        if range_end < range_start:
-            range_start, range_end = range_end, range_start
+        range_start, range_end = _resolve_month_range(today, start_month, end_month)
 
         range_params = {
             "user_id": user["id"],
@@ -128,16 +179,13 @@ def home(
     finally:
         conn.close()
 
-    all_rekening_ids = {str(r["ID"]) for r in rekeningen}
-    all_cat_ids = {_NONE_CAT_KEY} | {str(c["ID"]) for c in categorieen}
-
     # Distinguishes "form actually submitted" (even with everything
     # unchecked — that's a legitimate all-zero view) from "fresh page
     # load, no filter chosen yet" (defaults to everything selected).
-    is_filtered = filtered is not None
-    selected_rekening_ids = set(rekening_ids) if is_filtered else set(all_rekening_ids)
-    selected_cat_ids = set(cat_ids) if is_filtered else set(all_cat_ids)
-    selected_graph_lines = set(graph_lines) if is_filtered else set(_DEFAULT_GRAPH_LINES)
+    selected_rekening_ids, selected_cat_ids = _resolve_selected_ids(
+        rekeningen, categorieen, rekening_ids, cat_ids, filtered
+    )
+    selected_graph_lines = set(graph_lines) if filtered is not None else set(_DEFAULT_GRAPH_LINES)
 
     filtered_rows = [
         r for r in rows
@@ -224,5 +272,82 @@ def home(
             "chart": chart,
             "months_json": json.dumps(months),
             "presets": _build_presets(today, (bounds["min_datum"], bounds["max_datum"]) if bounds else (None, None)),
+            "export_url": _export_url(range_start, range_end, selected_rekening_ids, selected_cat_ids),
         },
+    )
+
+
+_EXPORT_HEADER = [
+    "Datum", "Naam", "Rekening", "Tegenrekening", "Code", "Af_bij", "Bedrag_eur",
+    "Mutatiesoort", "Mededeling", "Saldo_na_mutatie", "Tag", "Categorie",
+]
+
+
+@router.get("/export")
+def export_csv(
+    request: Request,
+    start_month: Optional[str] = None,
+    end_month: Optional[str] = None,
+    rekening_ids: List[str] = Query(default_factory=list),
+    cat_ids: List[str] = Query(default_factory=list),
+    filtered: Optional[str] = None,
+):
+    """Downloads exactly the current dashboard selection (Rekeningen,
+    categorieën, period — same query params as home(), built into the
+    "Exporteren naar CSV" link by _export_url) as a standalone CSV. Every
+    foreign key is resolved to its name in SQL itself
+    (sql/queries/afschrift/export_for_user.sql) rather than left as an
+    ID, since the file is meant to be read outside the app. Hit directly
+    without params (rather than via that link), it falls back to the
+    same "everything selected, last 6 months" default as a fresh
+    dashboard load.
+
+    ';'-delimited with Dutch-formatted (comma-decimal) amounts, the
+    standard Dutch/Excel-NL CSV convention — paired on purpose, since a
+    Dutch spreadsheet's locale reads ',' as the decimal separator and
+    therefore expects ';' as the field delimiter, not ','.
+    """
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user["id"]}).fetchall()
+        categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+
+        range_start, range_end = _resolve_month_range(date.today(), start_month, end_month)
+        selected_rekening_ids, selected_cat_ids = _resolve_selected_ids(
+            rekeningen, categorieen, rekening_ids, cat_ids, filtered
+        )
+
+        rows = conn.execute(
+            _EXPORT_AFSCHRIFT_SQL,
+            {"user_id": user["id"], "start": range_start.isoformat(), "end": month_end(range_end).isoformat()},
+        ).fetchall()
+    finally:
+        conn.close()
+
+    export_rows = [
+        r for r in rows
+        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
+    ]
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(_EXPORT_HEADER)
+    for r in export_rows:
+        writer.writerow([
+            r["Datum"], r["Naam"], r["rekening_name"], r["Tegenrekening"], r["Code"], r["Af_bij"],
+            format_amount_nl(r["Bedrag_eur"]), r["mutatiesoort_name"], r["Mededeling"],
+            format_amount_nl(r["Saldo_na_mutatie"]), r["Tag"], r["category"],
+        ])
+
+    start_key = f"{range_start.year:04d}-{range_start.month:02d}"
+    end_key = f"{range_end.year:04d}-{range_end.month:02d}"
+    filename = f"afschrift_{start_key}_tot_{end_key}.csv"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

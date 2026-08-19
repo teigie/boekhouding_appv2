@@ -198,6 +198,17 @@
       <p class="muted">Geen gegevens voor de geselecteerde rekeningen/categorieën in deze periode.</p>
     {% endif %}
   </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Exporteren</h2>
+    <p class="muted">
+      Exporteert alle <code>afschrift</code>-rijen binnen de hierboven
+      gekozen rekeningen, categorieën en periode als CSV-bestand — met
+      rekening, mutatiesoort en categorie als naam in plaats van interne
+      ID's.
+    </p>
+    <a href="{{ export_url }}" class="chip">Exporteren naar CSV</a>
+  </section>
 {% endblock %}
 {% block scripts %}
   <script src="/static/js/dashboard.js" defer></script>

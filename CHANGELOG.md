@@ -5,6 +5,37 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-19 — CSV export: Dutch number format
+
+- `Bedrag_eur`/`Saldo_na_mutatie` in the dashboard's CSV export now use
+  Dutch notation (`,` decimal, `.` thousands, e.g. `1.234,50`) instead of
+  a plain dot-decimal float — new `app/formatting.py::format_amount_nl`,
+  the reverse of `app/categorization_rules.py::_parse_dutch_amount`.
+  Paired with switching the CSV's field delimiter from `,` to `;`: a
+  Dutch-locale spreadsheet reads `,` as the decimal separator, so it
+  needs `;` between fields to parse correctly — the standard Dutch/
+  Excel-NL CSV convention.
+
+### 2026-08-19 — Dashboard: CSV export + select-all/deselect-all checkboxes
+
+- New "Exporteren naar CSV" link below the "Per categorie" table
+  (`GET /export`, `app/routes/dashboard.py::export_csv`) downloads
+  exactly the currently selected Rekeningen/categorieën/period as a
+  standalone CSV — every `afschrift` column, with foreign keys
+  (Rekening, Mutatiesoort, categorie) resolved to their names instead of
+  left as IDs, via a new query (`sql/queries/afschrift/export_for_user.sql`).
+  The link's URL is built server-side from the request that rendered the
+  page (`_export_url`), so it always matches what's on screen rather than
+  offering a separate export filter. Refactored the month-range/
+  selected-ID resolution `home()` already did into two shared helpers
+  (`_resolve_month_range`, `_resolve_selected_ids`) so `export_csv`
+  applies identical filtering semantics, including the same
+  "everything selected" fallback when hit without params.
+- "Alles selecteren"/"Alles deselecteren" chip buttons above both the
+  Categorieën and Lijnen-in-de-grafiek checkbox groups
+  (`app/static/js/dashboard.js`) — toggles just that group's checkboxes,
+  doesn't submit the form.
+
 ### 2026-08-19 — Dashboard: expandable "Per categorie" rows
 
 - Each row of the dashboard's "Per categorie" table can now be clicked
