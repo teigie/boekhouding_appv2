@@ -43,6 +43,24 @@ rekening koppelen; dat gebeurt op de profielpagina
 (`/user/{username}`, zie hieronder), via `POST /accounts`
 (`app/routes/accounts.py`).
 
+Een rekening kan ook weer verwijderd worden (`POST /accounts/{rekening_id}/delete`,
+`app/routes/accounts.py::delete_account`) — er is geen manier om één
+bankafschriftregel los te koppelen van haar rekening, dus dit is
+alles-of-niets: de `Rekening`-rij zelf, én al haar `temp_afschrift`- én
+(al gemigreerde) `afschrift`-rijen, verdwijnen in dezelfde transactie.
+`Rekening_ID` heeft bewust geen `ON DELETE CASCADE` op geen van beide
+tabellen (zie "Waarom SQL-first" hieronder — bedrijfsregels moeten
+zichtbaar staan als eigen `.sql`-bestanden, niet impliciet in het schema
+zitten), dus alle drie de deletes staan expliciet in
+`app/routes/accounts.py::delete_account`, kind-vóór-ouder om de foreign
+keys niet te breken (`sql/queries/temp_afschrift/delete_for_rekening.sql`,
+`sql/queries/afschrift/delete_for_rekening.sql`, dan pas
+`sql/queries/rekeningen/delete_rekening.sql`). Vóórdat de POST ooit
+verstuurd wordt, toont de profielpagina precies hoeveel rijen dat raakt
+(`sql/queries/rekeningen/count_data_for_user.sql`) in een
+JavaScript-bevestiging (`app/static/js/user.js`) — dat is de enige rem;
+er is geen ongedaan-maken.
+
 Uitgavencategorieën (`afschrift_categorien`) en hun categoriseringsregels
 (`afschrift_cat_regels`, zie "Fase 2" hieronder) zijn op dezelfde manier
 per gebruiker: elke gebruiker bouwt en beheert zijn eigen lijst, ook op de
@@ -360,9 +378,10 @@ synonieme labels toch al tot één mutatiesoort samenvoegt.
 ### Fase 3 — handmatige controle
 
 Rijen met `processed = 0` of `2` blijven in `temp_afschrift` staan totdat
-de gebruiker ze handmatig oplost (een categorie toewijzen, een rekening
-corrigeren, kiezen tussen ambigue matches). Eenmaal opgelost, worden ze
-opnieuw gemarkeerd als `processed = 1`.
+de gebruiker ze handmatig oplost door een categorie te kiezen — dat werkt
+voor beide gevallen identiek, er is geen apart mechanisme voor ambigue
+rijen (zie hieronder). Eenmaal opgelost, worden ze opnieuw gemarkeerd als
+`processed = 1`.
 
 `/review` (`app/routes/review.py`, `sql/queries/temp_afschrift/
 list_all_for_user.sql`) toont **alle** `temp_afschrift`-rijen van de
@@ -400,8 +419,15 @@ uitgevoerd die migratie nodig heeft: zijn álle rijen van die rekening nu
 `processed = 1`? Zo ja, toont de pagina naast de tabel een "Migreren naar
 afschrift"-knop (`POST /review/{rekening_id}/migrate`, zie Fase 4
 hieronder). Zo nee, blijft de tabel gewoon staan voor verdere correctie.
-Rekening corrigeren en kiezen tussen ambigue matches zijn nog niet
-gebouwd.
+Een ambigue rij (`processed = 2`) wordt op precies dezelfde manier
+opgelost als een onopgeloste: dezelfde dropdown, dezelfde
+opslaan-knop — één categorie kiezen hakt de knoop meteen door, dus er is
+geen apart "kies tussen deze matches"-scherm nodig. Een rekening
+"corrigeren" (een rij naar een andere `Rekening_ID` verplaatsen, of een
+gekoppeld IBAN achteraf wijzigen) is niet gebouwd en ook niet gepland —
+in plaats daarvan kan een hele rekening verwijderd worden (zie
+"Identiteit & rekeningen" hierboven) en zo nodig met het juiste IBAN
+opnieuw gekoppeld worden.
 
 ### Fase 4 — migratie (`temp_afschrift` → `afschrift`)
 

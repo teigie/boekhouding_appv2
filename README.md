@@ -10,18 +10,25 @@ tijd.
 - **Uitvoeringsmodus:** lokale webserver, geopend in een browser
 
 Huidige status: inloggen/aanmelden (geen wachtwoorden — je kiest gewoon
-wie je bent), rekeningen koppelen, en het uploaden van een ING NL-
-bankafschrift werken end-to-end, inclusief automatische categorisering
-erna (per-rekening saldoketen-, dubbele-rij- en mutatiesoort-controles,
-alles-of-niets, gevolgd door automatische categorie-toewijzing zodra een
-batch geaccepteerd is). Op `/review` staat, per rekening in een eigen
-tabel, elke `temp_afschrift`-rij (opgelost én niet) met een dropdown om
-de categorie te corrigeren of een nieuwe toe te voegen — één opslaan-knop
-per tabel verwerkt alle rijen van die rekening ineens, en checkt meteen
-of de rekening klaar is voor migratie (zonder daadwerkelijk te
-migreren). Een rekening corrigeren, kiezen tussen ambigue matches,
-migratie naar het permanente grootboek, en bekijken/rapporteren zijn nog
-niet gebouwd. Zie
+wie je bent), rekeningen koppelen of weer verwijderen, en het uploaden
+van een ING NL-bankafschrift werken end-to-end, inclusief automatische
+categorisering erna (per-rekening saldoketen-, dubbele-rij- en
+mutatiesoort-controles, alles-of-niets, gevolgd door automatische
+categorie-toewijzing zodra een batch geaccepteerd is). Op `/review`
+staat, per rekening in een eigen tabel, elke `temp_afschrift`-rij
+(opgelost én niet, ook ambigue) met een dropdown om de categorie te
+kiezen of corrigeren — één opslaan-knop per tabel verwerkt alle rijen van
+die rekening ineens, en checkt meteen of de rekening klaar is voor
+migratie naar het permanente grootboek (`afschrift`), wat vanaf diezelfde
+pagina met één knop kan zodra alle rijen opgelost zijn. Het dashboard
+(`/`) rapporteert over dat grootboek: filterbaar op maand, rekening en
+categorie, met een lijngrafiek. Een rekening verwijderen
+(profielpagina, `/user/{username}`) neemt haar volledige
+`temp_afschrift`- én `afschrift`-geschiedenis in dezelfde
+alles-of-niets-actie mee, met een voorafgaande waarschuwing die precies
+telt hoeveel rijen dat raakt — er is geen manier om alleen de rekening
+zelf te hernoemen of één rij naar een andere rekening te verplaatsen; wie
+dat nodig heeft, verwijdert en koppelt opnieuw. Zie
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) voor het volledige ontwerp en
 [CHANGELOG.md](CHANGELOG.md) voor wat er tot nu toe daadwerkelijk gebouwd
 is.

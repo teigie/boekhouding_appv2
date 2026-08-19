@@ -20,8 +20,14 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
 - `users/` — login/signup: list, create, find-by-id, touch last-logged-in.
 - `rekeningen/` — accounts: list for a user, create/link, find-by-name
   (used by the upload pipeline to resolve + authorize an account),
-  find-by-id-for-user (used by `/review`'s per-table save to confirm the
-  account in the URL is actually the logged-in user's).
+  find-by-id-for-user (used by `/review`'s per-table save, and by
+  account deletion, to confirm the account in question is actually the
+  logged-in user's), count-data-for-user (how many temp_afschrift +
+  afschrift rows an account has, shown in the profile page's "Rekening
+  verwijderen" confirmation warning), delete-rekening (the last step of
+  deleting an account, after its temp_afschrift/afschrift rows — see
+  `temp_afschrift/delete_for_rekening.sql` and
+  `afschrift/delete_for_rekening.sql` below).
 - `mutatiesoorten/` — find-by-name (used by the upload pipeline's
   pre-insert Mutatiesoort gate, and by categorization to resolve
   `Mutatiesoort_ID`).
@@ -38,7 +44,9 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   for display (`list_all_for_user.sql`), and the write behind its
   per-table save button (`set_category.sql`, run once per row submitted)
   — scoped to the logged-in user via a Rekening ownership check baked
-  into the UPDATE itself.
+  into the UPDATE itself. `delete_for_rekening.sql` wipes one account's
+  entire backlog as the first step of deleting the account itself (see
+  `app/routes/accounts.py::delete_account`).
 - `afschrift/` — reporting over the permanent ledger, scoped to the
   logged-in user's own Rekeningen, reading only `afschrift` (never
   `temp_afschrift` — rows not yet migrated (Fase 4) don't count towards
@@ -51,7 +59,9 @@ schema/seed files or the pipeline stages in `sql/categorization/` and
   headline totals, the per-category table, and (via
   `app/dashboard_chart.py`) the linegraph's monthly series, all from one
   query. `date_bounds_for_user.sql` gives the dashboard's "Alles" preset
-  real month bounds instead of an arbitrary epoch range.
+  real month bounds instead of an arbitrary epoch range. `delete_for_rekening.sql`
+  is the one place this ledger is ever deleted from — the second step of
+  deleting an account, right after `temp_afschrift/delete_for_rekening.sql`.
 - `regels/` — a user's own categorization rules: `list_for_user.sql`
   nests every rule (rule → column → keywords) for the profile page's
   read-only summary; `find_for_user.sql` is the ownership check for the

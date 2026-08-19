@@ -11,6 +11,9 @@ from app.categorization_rules import REGEL_KOLOMMEN
 from app.config import SQL_DIR
 
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
+_COUNT_REKENING_DATA_SQL = (
+    SQL_DIR / "queries" / "rekeningen" / "count_data_for_user.sql"
+).read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
@@ -47,10 +50,24 @@ def _group_regels_by_category(rows) -> dict:
 
 
 def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
-    """Rekeningen, plus categories with their categorization rules nested
-    underneath, plus the suggestion chips still worth offering (names the
-    user doesn't already have, case-insensitively)."""
+    """Rekeningen — each annotated with data_count, how many
+    temp_afschrift + afschrift rows currently belong to it, shown in the
+    "Rekening verwijderen" confirmation warning (app/static/js/user.js) —
+    plus categories with their categorization rules nested underneath,
+    plus the suggestion chips still worth offering (names the user
+    doesn't already have, case-insensitively)."""
     rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user_id}).fetchall()
+    rekeningen_out = [
+        {
+            "ID": r["ID"],
+            "name": r["name"],
+            "creation_date": r["creation_date"],
+            "data_count": conn.execute(
+                _COUNT_REKENING_DATA_SQL, {"rekening_id": r["ID"], "user_id": user_id}
+            ).fetchone()["row_count"],
+        }
+        for r in rekeningen
+    ]
     categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user_id}).fetchall()
     suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
     regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
@@ -64,7 +81,7 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     suggesties = [s for s in suggesties if s["Name"].casefold() not in owned_names]
 
     return {
-        "rekeningen": rekeningen,
+        "rekeningen": rekeningen_out,
         "categorieen": categorieen_out,
         "suggesties": suggesties,
         "regel_kolommen": REGEL_KOLOMMEN,

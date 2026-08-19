@@ -10,7 +10,13 @@
     {% if rekeningen %}
       <ul>
         {% for r in rekeningen %}
-          <li>{{ r["name"] }} <span class="muted">(toegevoegd op {{ r["creation_date"] | eu_datetime }})</span></li>
+          <li class="table-actions" style="justify-content: space-between;">
+            <span>{{ r["name"] }} <span class="muted">(toegevoegd op {{ r["creation_date"] | eu_datetime }})</span></span>
+            <form method="post" action="/accounts/{{ r['ID'] }}/delete" class="inline-form js-confirm-delete-rekening"
+                  data-rekening-name="{{ r['name'] }}" data-count="{{ r['data_count'] }}">
+              <button type="submit" class="link-button">Verwijderen</button>
+            </form>
+          </li>
         {% endfor %}
       </ul>
     {% else %}
@@ -154,4 +160,7 @@
       </section>
     {% endfor %}
   {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script src="/static/js/user.js" defer></script>
 {% endblock %}

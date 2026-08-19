@@ -9,13 +9,18 @@ unfiltered row set, never the filtered display subset.
 
 Correcting a row's category is the main thing this page can do — a
 dropdown per row, saved for a whole account's table in one go via a single
-button. Saving re-runs the "is this account fully resolved" check the
-migration step needs, and shows a "Migreren naar afschrift"-button under a
-fully resolved table. That button posts to /review/{rekening_id}/migrate,
-which re-checks the same condition against the database (never trusts the
-already-rendered page state) via app/migration.py before moving anything.
-Correcting the account or picking between ambiguous keyword matches is
-still a later step.
+button. This is also how an ambiguous row (processed = 2) gets resolved —
+same dropdown, same save button as an unresolved row; picking a category
+is itself the resolution, there's no separate "choose between these
+matches" step. Saving re-runs the "is this account fully resolved" check
+the migration step needs, and shows a "Migreren naar afschrift"-button
+under a fully resolved table. That button posts to
+/review/{rekening_id}/migrate, which re-checks the same condition against
+the database (never trusts the already-rendered page state) via
+app/migration.py before moving anything. Moving a row to a different
+account, or editing an already-linked account's IBAN, isn't possible —
+see app/routes/accounts.py::delete_account for the alternative (delete
+the account and re-link the correct one).
 
 Also hosts the "Categorisatie opnieuw proberen" button (moved here from
 /upload — this is where its outcome actually matters) — see

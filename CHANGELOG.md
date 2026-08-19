@@ -5,6 +5,38 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### 2026-08-19 — Rekening verwijderen + docs cleanup
+
+- **New**: an account (`Rekening`) can now be deleted from the profile
+  page (`/user/{username}`), next to its entry in the Rekeningen list.
+  This is all-or-nothing — there's no way to unlink a bank statement row
+  from its account, so deleting one takes its *entire* `temp_afschrift`
+  backlog and already-migrated `afschrift` history with it, in one
+  transaction (`POST /accounts/{rekening_id}/delete`,
+  `app/routes/accounts.py::delete_account`; new queries
+  `sql/queries/temp_afschrift/delete_for_rekening.sql`,
+  `sql/queries/afschrift/delete_for_rekening.sql`,
+  `sql/queries/rekeningen/delete_rekening.sql`, run child-before-parent
+  since neither table has `ON DELETE CASCADE` on `Rekening_ID`). Before
+  the button is ever clicked, the page shows a JavaScript confirmation
+  (`app/static/js/user.js`) that names the exact number of rows about to
+  be removed (`sql/queries/rekeningen/count_data_for_user.sql`, wired
+  in via `app/user_page.py::load_user_page_data`'s new `data_count` per
+  Rekening) — there's no undo, so this is the only safety net.
+- **Docs**: cleaned up several stale "not built yet" claims left over
+  from before migration, ambiguous-match resolution, and the dashboard
+  were actually finished — `README.md`, `docs/ARCHITECTURE.md` (Fase 3),
+  `app/routes/review.py`'s docstring, and `review.html`'s on-page
+  disclaimer all previously still said "Rekening corrigeren en kiezen
+  tussen ambigue matches komen in latere stappen" even though picking a
+  category on `/review` already resolves ambiguous rows exactly like
+  unresolved ones, and migration/dashboard have been live since
+  2026-08-17/18. "Rekening corrigeren" itself (reassigning a row to a
+  different account, or editing an already-linked IBAN) turned out to
+  not be worth building — deleting and re-linking the account, as above,
+  covers the same need — so the docs now say that instead of leaving it
+  listed as a future step.
+
 ### 2026-08-18 — Moved "Categorisatie opnieuw proberen" to /review + status filter
 
 - **Moved** the "Categorisatie opnieuw proberen" button from `/upload` to
