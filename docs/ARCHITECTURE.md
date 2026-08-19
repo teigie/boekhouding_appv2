@@ -573,3 +573,85 @@ aanpassingen:
   (bijv. "Esso" → Auto) zijn persoonlijk per gebruiker en worden opgebouwd
   via de profielpagina (`/user/{username}`, `app/routes/categories.py`),
   niet via seed-data.
+
+## Bijwerken (updates)
+
+Iemand die de app gekloond heeft, heeft anders geen enkele manier om te
+merken dat er een nieuwere versie bestaat — er is geen appstore, geen
+notificatiesysteem, niets. De oplossing bouwt bewust voort op hoe de app
+al gedistribueerd wordt (`git clone`), in plaats van er losse
+infrastructuur (een updateserver, een los versiebestand) naast te zetten.
+
+**Versienummering leeft uitsluitend in `CHANGELOG.md`** — elke regel
+begint met `## [x.y.z] - YYYY-MM-DD — Titel`, nieuwste bovenaan. Er is
+bewust geen apart `VERSION`-bestand: dat zou vroeg of laat los kunnen
+raken van de changelog zelf. `app/version.py::parse_changelog` leest die
+kopregels; `current_version()` is simpelweg de bovenste (nieuwste) versie
+in de lokale `CHANGELOG.md`.
+
+**De controle** (`app/version.py::check_for_update`, aangeroepen als
+achtergrondtaak bij het opstarten, `app/main.py`'s `lifespan`) doet een
+`git fetch` en leest daarna `origin/main`'s `CHANGELOG.md` rechtstreeks
+uit de zojuist opgehaalde geschiedenis (`git show origin/main:CHANGELOG.md`)
+— zonder de working tree aan te raken, dus zonder iets te pullen. Is de
+bovenste versie daar hoger dan de eigen `current_version()`, dan wordt
+het resultaat (huidige versie, nieuwste versie, en de lijst gemiste
+`## [...]`-secties) in een module-variabele bewaard. Dit is bewust
+best-effort: geen internet, geen `git` beschikbaar, geen echte
+git-checkout, of wat dan ook — elke storing wordt stilzwijgend als "niets
+gevonden" behandeld, nooit als fout. Draait op de achtergrond via
+`asyncio.to_thread` zodat een trage of offline controle het opstarten
+van de server nooit vertraagt.
+
+**De banner** (`base.html`, op elke pagina) leest dat resultaat via een
+Jinja-global (`update_info()`, geregistreerd in `app/templating.py`) —
+geen enkele route hoeft het apart door te geven in zijn eigen
+template-context. Toont de nieuwste versie, en (uitklapbaar) de volledige
+tekst van elke gemiste changelog-sectie, niet alleen de allerlaatste —
+iemand die een tijd niet heeft bijgewerkt ziet zo alsnog alles wat hij
+gemist heeft. "Niet nu" onthoudt de weggeklikte versienummer in
+`localStorage`, zodat de banner pas terugkomt zodra er een écht nieuwere
+versie is; een inline script vlak na de banner-markup (hetzelfde patroon
+als de thema-flits-fix) voorkomt dat hij eerst even opflitst voordat dat
+zou worden gecontroleerd.
+
+**Bijwerken zelf** (`POST /update/apply`, `app/routes/update.py` →
+`app/version.py::apply_update`) is altijd een expliciete klik op "Nu
+bijwerken", nooit automatisch: `git pull --ff-only` (weigert bij
+divergentie in plaats van te mergen — relevant voor een ontwikkelaar met
+lokale wijzigingen, niet voor een eindgebruiker die de code nooit
+aanraakt), gevolgd door `pip install -r requirements.txt` als dat
+bestand is meegewijzigd. Herstarten verschilt per manier van draaien:
+
+- **Launcher-modus** (`BOEKHOUDING_RELOAD=0`, `start_app.sh`/`.bat`/`.ps1`,
+  zie hierboven) heeft één enkel, aanspreekbaar `uvicorn.Server`-object op
+  `app.state.uvicorn_server` (hetzelfde haakje als `app/idle_shutdown.py`
+  al gebruikt). Omdat de launcher-scripts de server maar één keer starten
+  (bij de dubbelklik) en daarna niets meer bewaken, spawnt `apply_update`
+  zelf eerst een vervangend `python run.py`-proces (losgekoppeld,
+  cross-platform via `subprocess.Popen`) vóórdat hij de huidige server
+  vraagt te stoppen (`should_exit = True`) — anders blijft de gebruiker
+  na een succesvolle update zonder draaiende server achter.
+- **Dev-modus** (`python run.py`, `reload=True`) heeft zo'n aanspreekbaar
+  server-object niet — de eigenlijke app draait in een door uvicorn
+  bewaakt subproces. Daar is niets extra's nodig: de `.py`-bestanden die
+  `git pull` zojuist heeft overschreven zijn voor uvicorn's eigen
+  file-watcher al genoeg reden om het subproces zelf te herstarten.
+
+Bij een mislukte `git pull` (divergentie, lokale wijzigingen die in de
+weg zitten) verandert er niets — geen herstart, geen pip install — en
+toont `update_failed.html` de foutmelding. Bij succes toont
+`update_pending.html` een korte tussenpagina die elke 1-1,5s zichzelf
+opnieuw probeert te laden totdat de (oude of net-vervangen) server weer
+antwoordt.
+
+Geverifieerd end-to-end met twee lokale git-repo's (een bare "origin" +
+een clone die als draaiende app fungeerde, geen echt netwerk nodig): een
+schone checkout toont geen banner; een nieuwe versie op "origin" wordt
+bij de eerstvolgende opstart gedetecteerd en getoond, met exact de
+gemiste sectie(s); op "Nu bijwerken" klikken pullt succesvol, het oude
+serverproces sluit netjes af ná het versturen van de tussenpagina, een
+nieuw proces start vrijwel gelijktijdig op dezelfde poort, en de banner
+is daarna verdwenen (want up-to-date); een expres botsende lokale wijziging
+laat de `git pull` correct weigeren zonder dat er iets — code, database,
+draaiende server — wordt aangeraakt.

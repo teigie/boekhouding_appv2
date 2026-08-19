@@ -136,6 +136,49 @@ body {
   color: var(--text);
 }
 
+.update-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.85rem 1.5rem;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.update-banner__text summary {
+  cursor: pointer;
+  margin-top: 0.15rem;
+}
+
+.update-banner__entry {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.update-banner__entry:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.update-banner__body {
+  margin-top: 0.3rem;
+  white-space: pre-line;
+  color: var(--muted);
+}
+
+.update-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.update-banner__actions form {
+  margin: 0;
+}
+
 .content {
   max-width: 960px;
   margin: 0 auto;

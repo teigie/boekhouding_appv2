@@ -1,0 +1,37 @@
+{% set hide_update_banner = true %}
+{% extends "base.html" %}
+{% block title %}Boekhouding — bijwerken{% endblock %}
+{% block content %}
+  <section class="card">
+    <h1>Bezig met bijwerken…</h1>
+    <p class="muted">
+      De server wordt bijgewerkt en start opnieuw op. Deze pagina
+      herlaadt vanzelf zodra dat klaar is — dat duurt meestal een paar
+      seconden.
+    </p>
+  </section>
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function () {
+      // De server is op dit moment mogelijk al aan het herstarten (of
+      // staat op het punt om dat te doen), dus een enkele reload zou vaak
+      // gewoon een verbindingsfout treffen — blijf daarom pollen tot er
+      // weer een geldig antwoord komt.
+      function tryReload() {
+        fetch("/", { cache: "no-store" })
+          .then(function (resp) {
+            if (resp.ok) {
+              window.location.href = "/";
+            } else {
+              setTimeout(tryReload, 1000);
+            }
+          })
+          .catch(function () {
+            setTimeout(tryReload, 1000);
+          });
+      }
+      setTimeout(tryReload, 1500);
+    })();
+  </script>
+{% endblock %}

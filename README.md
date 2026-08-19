@@ -115,6 +115,16 @@ Het databasebestand en de logs zijn gitignored (zie `data/`, `logs/`) —
 ze worden lokaal gegenereerd en nooit gecommit, zodat elke kloon start
 vanuit dezelfde bijgehouden bron.
 
+### Bijwerken
+
+De app controleert bij het opstarten zelf of er een nieuwere versie op
+de git-remote staat, en toont bovenaan elke pagina een banner zodra dat
+zo is — met daarin alles wat je gemist hebt, niet alleen de laatste
+wijziging. Op "Nu bijwerken" klikken pullt de nieuwste versie en start de
+server zelf opnieuw op; er verandert nooit iets zonder die klik. Zie
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ("Bijwerken (updates)") voor
+hoe dat precies werkt.
+
 ## Projectstructuur
 
 ```

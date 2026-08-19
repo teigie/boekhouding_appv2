@@ -16,8 +16,9 @@ from app.config import BASE_DIR
 from app.db import init_db
 from app.idle_shutdown import record_activity, watch_idle
 from app.logging_config import get_app_logger, setup_logging
-from app.routes import accounts, auth, categories, dashboard, review, upload, user
+from app.routes import accounts, auth, categories, dashboard, review, update, upload, user
 from app.session import get_or_create_session_secret
+from app.version import refresh_update_check
 
 setup_logging()
 log = get_app_logger()
@@ -28,10 +29,19 @@ async def lifespan(app: FastAPI):
     log.info("Starting up")
     init_db()
     idle_task = asyncio.create_task(watch_idle(app))
+    # Runs in a thread (it shells out to git, which blocks) and is fully
+    # fire-and-forget — a slow or offline check must never delay the
+    # server actually coming up. Result lands in app.version's module-
+    # level cache, read by the update banner on every page render (see
+    # app/templating.py's "update_info" Jinja global).
+    update_check_task = asyncio.create_task(asyncio.to_thread(refresh_update_check))
     yield
     idle_task.cancel()
+    update_check_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await idle_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await update_check_task
     log.info("Shutting down")
 
 
@@ -47,6 +57,7 @@ app.include_router(categories.router)
 app.include_router(dashboard.router)
 app.include_router(upload.router)
 app.include_router(review.router)
+app.include_router(update.router)
 app.include_router(user.router)
 
 

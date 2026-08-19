@@ -1,0 +1,15 @@
+{% set hide_update_banner = true %}
+{% extends "base.html" %}
+{% block title %}Boekhouding — bijwerken mislukt{% endblock %}
+{% block content %}
+  <section class="card">
+    <h1>Bijwerken mislukt</h1>
+    <p class="error">{{ error }}</p>
+    <p class="muted">
+      Er is niets aangepast — de app draait nog gewoon op de huidige
+      versie. Dit gebeurt meestal als er op deze machine handmatige
+      wijzigingen in de broncode staan die botsen met de update.
+    </p>
+    <a href="/">Terug naar het dashboard</a>
+  </section>
+{% endblock %}

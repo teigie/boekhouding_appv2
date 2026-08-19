@@ -3,9 +3,77 @@
 History log of what's changed in the project, for us as programmers.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+Versienummering is puur intern (deze app heeft geen "releases" in de
+klassieke zin) — elke regel hieronder is één werksessie/wijziging,
+opgeteld sinds het begin van het project. Gebruikt door de app zelf om te
+bepalen of er een update beschikbaar is (zie `app/version.py`) en om te
+tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
+0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
+daarna is in het Nederlands.
 
-### 2026-08-19 — CSV export: Dutch number format
+## [0.0.30] - 2026-08-19 — Updatemechanisme: versiebeheer + update-banner
+
+- **Nieuw**: elke pagina toont bovenaan een banner zodra er een nieuwere
+  versie op de git-remote staat, met een "Nu bijwerken"-knop en een
+  uitklapbare lijst van *alle* changelog-secties die je gemist hebt (niet
+  alleen de nieuwste) — precies zodat iemand die de app gedownload heeft
+  ook daadwerkelijk kan merken dát er updates zijn, wat tot nu toe niet
+  kon. "Niet nu" onthoudt de weggeklikte versie (`localStorage`), en komt
+  vanzelf terug zodra er een écht nieuwere versie verschijnt.
+- Deze changelog is de enige bron van waarheid voor het versienummer —
+  geen apart `VERSION`-bestand. Elke regel hierboven heeft nu een
+  `## [x.y.z] - datum — titel`-kop; alle 29 bestaande entries (tot en met
+  deze) zijn met terugwerkende kracht op chronologische volgorde
+  hernummerd vanaf `0.0.1` (oudste, 2026-08-13) tot `0.0.29`. De volgorde
+  in het bestand is daarbij consistent nieuwste-boven-oudste gemaakt —
+  de oudste ~11 entries stonden voorheen in omgekeerde volgorde
+  (oudste-eerst) onderaan het bestand.
+- **Nieuw** `app/version.py`: `parse_changelog()` leest de
+  `## [x.y.z] - ...`-koppen; `current_version()` is simpelweg de bovenste
+  (nieuwste) in de lokale `CHANGELOG.md`. `check_for_update()` doet een
+  best-effort `git fetch` en leest daarna `origin/main`'s `CHANGELOG.md`
+  rechtstreeks uit de opgehaalde geschiedenis (`git show
+  origin/main:CHANGELOG.md`, dus zonder de working tree aan te raken) —
+  is de bovenste versie daar hoger, dan komt het resultaat (huidige
+  versie, nieuwste versie, gemiste secties) in een module-cache die de
+  banner via een nieuwe Jinja-global (`update_info()`,
+  `app/templating.py`) op elke pagina kan uitlezen zonder dat een route
+  het apart hoeft door te geven. Draait als achtergrondtaak bij het
+  opstarten (`app/main.py`'s `lifespan`, via `asyncio.to_thread`) zodat
+  een trage of offline controle de server nooit ophoudt met starten; elke
+  storing (geen internet, geen git, geen echte checkout) wordt
+  stilzwijgend als "niets gevonden" behandeld, nooit als fout.
+- **Nieuw** `POST /update/apply` (`app/routes/update.py` →
+  `app/version.py::apply_update`) achter de "Nu bijwerken"-knop — nooit
+  automatisch. `git pull --ff-only` (weigert bij divergentie in plaats
+  van te mergen), gevolgd door `pip install -r requirements.txt` als dat
+  bestand meeveranderde. Herstarten verschilt per manier van draaien: in
+  launcher-modus (`BOEKHOUDING_RELOAD=0`) spawnt `apply_update` eerst
+  zelf een vervangend `python run.py`-proces (losgekoppeld, cross-
+  platform) vóórdat de huidige server wordt gevraagd te stoppen —
+  anders blijft de launcher (die de server maar één keer start en daarna
+  niets bewaakt) de gebruiker zonder draaiende server achterlaten. In
+  dev-modus (`python run.py`, `reload=True`) is dat niet nodig: de zojuist
+  door `git pull` overschreven `.py`-bestanden zijn voor uvicorn's eigen
+  file-watcher al genoeg reden om zichzelf te herstarten. Bij een
+  mislukte pull verandert er niets (`update_failed.html` toont de
+  foutmelding); bij succes toont `update_pending.html` een tussenpagina
+  die zichzelf elke 1-1,5s opnieuw probeert te laden tot de server weer
+  antwoordt.
+- **Afspraak vanaf nu**: nieuwe changelog-entries worden in het
+  Nederlands geschreven (bestaande Engelse entries blijven ongewijzigd).
+- **Geverifieerd** end-to-end met twee lokale git-repo's (een bare
+  "origin" + een clone die als draaiende app fungeerde, geen echt netwerk
+  nodig): een schone checkout toont geen banner; een nieuwe versie op
+  "origin" wordt bij de eerstvolgende opstart gedetecteerd met exact de
+  juiste gemiste sectie(s); "Nu bijwerken" pullt succesvol, het oude
+  serverproces sluit pas af nadat de tussenpagina is verstuurd, een nieuw
+  proces staat vrijwel gelijktijdig weer op dezelfde poort te luisteren,
+  en de banner is daarna verdwenen; een expres botsende lokale wijziging
+  laat de pull correct weigeren zonder dat code, database of de draaiende
+  server worden aangeraakt.
+
+## [0.0.29] - 2026-08-19 — CSV export: Dutch number format
 
 - `Bedrag_eur`/`Saldo_na_mutatie` in the dashboard's CSV export now use
   Dutch notation (`,` decimal, `.` thousands, e.g. `1.234,50`) instead of
@@ -16,7 +84,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   needs `;` between fields to parse correctly — the standard Dutch/
   Excel-NL CSV convention.
 
-### 2026-08-19 — Dashboard: CSV export + select-all/deselect-all checkboxes
+## [0.0.28] - 2026-08-19 — Dashboard: CSV export + select-all/deselect-all checkboxes
 
 - New "Exporteren naar CSV" link below the "Per categorie" table
   (`GET /export`, `app/routes/dashboard.py::export_csv`) downloads
@@ -36,7 +104,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   (`app/static/js/dashboard.js`) — toggles just that group's checkboxes,
   doesn't submit the form.
 
-### 2026-08-19 — Dashboard: expandable "Per categorie" rows
+## [0.0.27] - 2026-08-19 — Dashboard: expandable "Per categorie" rows
 
 - Each row of the dashboard's "Per categorie" table can now be clicked
   (or activated with Enter/Space) to expand a nested table of the
@@ -58,7 +126,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   unchecking the account empties the whole table, and selecting a single
   category shows only its own expand target.
 
-### 2026-08-19 — Rekening verwijderen + docs cleanup
+## [0.0.26] - 2026-08-19 — Rekening verwijderen + docs cleanup
 
 - **New**: an account (`Rekening`) can now be deleted from the profile
   page (`/user/{username}`), next to its entry in the Rekeningen list.
@@ -90,7 +158,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   covers the same need — so the docs now say that instead of leaving it
   listed as a future step.
 
-### 2026-08-18 — Moved "Categorisatie opnieuw proberen" to /review + status filter
+## [0.0.25] - 2026-08-18 — Moved "Categorisatie opnieuw proberen" to /review + status filter
 
 - **Moved** the "Categorisatie opnieuw proberen" button from `/upload` to
   the top of `/review` (Controle) — that's the page where its outcome
@@ -127,7 +195,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   correctly, confirming the filter changes didn't regress the existing
   save/migrate flow.
 
-### 2026-08-18 — Upload page: "Categorisatie opnieuw proberen" button
+## [0.0.24] - 2026-08-18 — Upload page: "Categorisatie opnieuw proberen" button
 
 - New button on `/upload` that re-runs automatic rule-based categorization
   on demand, without a re-upload — for when the user adds or edits a
@@ -180,7 +248,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   three message states (nothing changed / resolved / newly ambiguous)
   render correctly end-to-end.
 
-### 2026-08-18 — Fix: ING NL importer had the balance-chain row order backwards
+## [0.0.23] - 2026-08-18 — Fix: ING NL importer had the balance-chain row order backwards
 
 - **Bug**: `app/importers/ing_nl.py::parse()` returned rows in the CSV's own
   file order and `BaseImporter`'s contract assumed that file order *was*
@@ -218,7 +286,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   dev DB — the earlier real-world rejection rolled back before ever
   committing, so no corrupted rows exist to clean up.
 
-### 2026-08-18 — Dashboard: month-range filtering, Rekening/categorie selection, linegraph
+## [0.0.22] - 2026-08-18 — Dashboard: month-range filtering, Rekening/categorie selection, linegraph
 
 - Date filtering is now whole calendar months only (`?start_month=&end_month=`,
   "YYYY-MM" via `<input type="month">`) instead of arbitrary dates —
@@ -277,7 +345,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   erroring. Confirmed no impact on unrelated pages (`/review`, `/upload`,
   the profile page) or the real dev DB/server.
 
-### 2026-08-18 — Light/dark theme toggle
+## [0.0.21] - 2026-08-18 — Light/dark theme toggle
 
 - Theming was purely `prefers-color-scheme`-driven before (no way to
   override the OS/browser setting). Added a 🌙/☀️ button in the topbar
@@ -304,7 +372,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   for all four (explicit choice × system preference) combinations against
   actual selector specificity — each resolves to the intended theme.
 
-### 2026-08-18 — Idle auto-shutdown for the launcher scripts
+## [0.0.20] - 2026-08-18 — Idle auto-shutdown for the launcher scripts
 
 - The server can now shut itself down after a period of no HTTP traffic —
   scoped specifically to the "launcher" way of starting the app
@@ -342,7 +410,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   after 20+ idle seconds). The real dev DB/server were never touched by
   any of this testing.
 
-### 2026-08-18 — Windows launcher
+## [0.0.19] - 2026-08-18 — Windows launcher
 
 - Added `start_app.ps1` (the launcher logic, ported from `start_app.sh`:
   poll `http://127.0.0.1:8000`, start `.venv\Scripts\python.exe run.py`
@@ -358,7 +426,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   both platforms, including the standard Windows "Verzenden naar →
   Bureaublad" way to turn `start_app.bat` into a desktop shortcut.
 
-### 2026-08-18 — One-click desktop launcher (Linux)
+## [0.0.18] - 2026-08-18 — One-click desktop launcher (Linux)
 
 - Added `start_app.sh`: starts `run.py` in the background if it isn't
   already running (checked by polling `http://127.0.0.1:8000`), waits for
@@ -374,7 +442,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   `README.md` for the copy/`chmod` steps and the one-time GNOME "trust
   this launcher" prompt.
 
-### 2026-08-17 — Dedicated rule-edit page
+## [0.0.17] - 2026-08-17 — Dedicated rule-edit page
 
 - Replaced the profile page's inline per-column "+ keyword" mini-forms
   and per-keyword delete buttons with a single "Aanpassen" button per
@@ -420,7 +488,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   anything, on both the GET and POST route. No schema change was needed
   for this, so nothing further to migrate on the real database.
 
-### 2026-08-17 — General rule-based categorization
+## [0.0.16] - 2026-08-17 — General rule-based categorization
 
 - Replaced the old three categorization mechanisms — "simple"
   (`afschrift_cat_keywords`, Naam substrings), "difficult"
@@ -493,7 +561,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   keyword to an existing column, deleting a single keyword (with cascade
   cleanup), and deleting a whole rule all behave correctly.
 
-### 2026-08-17 — Profile page + real dashboard (Fase 5)
+## [0.0.15] - 2026-08-17 — Profile page + real dashboard (Fase 5)
 
 - New per-user profile page at `/user/{username}` (`app/routes/user.py`,
   `app/user_page.py`, template `user.html`), replacing the separate
@@ -539,7 +607,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   with the existing Rekeningen/categorieën still visible alongside the
   error.
 
-### 2026-08-17 — Fase 4: migrate resolved rows into `afschrift`
+## [0.0.14] - 2026-08-17 — Fase 4: migrate resolved rows into `afschrift`
 
 - Implemented the `temp_afschrift` → `afschrift` migration step (Fase 4,
   see `docs/ARCHITECTURE.md`), previously just a `sql/migration/README.md`
@@ -573,7 +641,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   `rekening_id` for another user's account is rejected before any check
   runs.
 
-### 2026-08-17 — Paired Naam keyword for difficult categorization
+## [0.0.13] - 2026-08-17 — Paired Naam keyword for difficult categorization
 
 - Added an optional `naam_keyword` column to
   `afschrift_cat_mededeling_keywords`: a difficult (Mededeling) keyword
@@ -590,7 +658,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 - Added `scripts/migrate_add_naam_keyword_pairing.py` — a plain `ALTER
   TABLE ADD COLUMN` (nullable, no rebuild needed) for existing databases.
 
-### 2026-08-17 — Per-user categories & keywords
+## [0.0.12] - 2026-08-17 — Per-user categories & keywords
 
 - Made spending categories (`afschrift_categorien`) and both keyword
   tables (`afschrift_cat_keywords`, `afschrift_cat_mededeling_keywords`)
@@ -625,149 +693,164 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   current single user, and seeds `afschrift_categorie_suggesties` — with
   a timestamped backup, a `--dry-run` mode, and an idempotency guard.
 
-### 2026-08-13 — Project scaffold
+## [0.0.11] - 2026-08-14 — `/review`: save per table, "ready for migration" check, wider page
 
-- Set up the FastAPI + SQLite project structure: `app/` (backend),
-  `sql/` (all SQL as tracked files), `data/` (gitignored DB),
-  `logs/` (gitignored runtime logs), `docs/` (this design documentation).
-- Added `sql/schema.sql` (all tables) and `sql/seed_data.sql` (mandatory
-  reference data: categories, mutation types). Category keywords were
-  split out into `sql/optional/example_keywords.sql` since they're
-  personal to one user, not structural data every install needs.
-- Added `sql/queries/reference_data/` templates (`add_category.sql`,
-  `add_keyword.sql`, `remove_keyword.sql`) for managing categories/
-  keywords after installation, separate from the one-time seed file.
-  Category removal deliberately not provided (FK dependency on existing
-  ledger rows — see the comment in `remove_keyword.sql`).
-- Added `app/db.py`: connection handling + one-time DB init from
-  `schema.sql`/`seed_data.sql`, idempotent (`INSERT OR IGNORE`) and
-  no-ops if the database already exists.
-- Added `app/logging_config.py`: two rotating logs — `app.log`
-  (technical/runtime, also echoed to console) and `audit.log`
-  (data-changing events — currently just wired up, not yet emitting
-  business events since upload/enrichment/migration don't exist yet).
-- Added a minimal FastAPI app (`app/main.py`) with request logging
-  middleware and one placeholder dashboard page (`/`) proving the
-  database/templates/static files all wire up correctly.
-- Documented the full upload → enrichment → review → migration pipeline,
-  the `processed` status semantics (0/1/2), the per-account dedup/
-  continuity/all-or-nothing-migration rules, and the portability
-  approach in `docs/ARCHITECTURE.md`.
-- Established that all paths are relative (`app/config.py`) and the
-  database/logs are never committed, so the project can be cloned onto a
-  different machine or handed to someone else without changes.
+- Replaced the per-row save button with one save button per Rekening
+  table: `POST /review/{id}/category` is gone, replaced by
+  `POST /review/{rekening_id}/save`, which reads every `cat_id_<row>` /
+  `new_category_name_<row>` field submitted by that table's single
+  `<form>` (wrapping the whole table, not just one row) and resolves each
+  the same way as before (reuse-by-name, create-if-new, always
+  `processed = 1`). The account in the URL is checked against the logged
+  -in user (new `sql/queries/rekeningen/find_by_id_for_user.sql`) before
+  anything is touched; each row update is still additionally scoped by
+  `set_category.sql`'s own ownership check.
+- After saving, the same "is every row for this account now
+  `processed = 1`?" check the future migration step will need runs
+  immediately, and the page says so under that table — "klaar voor
+  migratie naar afschrift (nog niet geïmplementeerd)" if true, "nog niet
+  alle rijen zijn opgelost" otherwise. **Nothing is migrated into
+  `afschrift` yet** — that's still Fase 4, deliberately not built here,
+  this only surfaces whether an account *would* qualify.
+- `list_all_for_user.sql` now also selects `Rekening.ID` (not just the
+  name) so the per-table form's action URL and the post-save readiness
+  check have something to key off of.
+- Added a `content_class` block to `base.html` so an individual page can
+  widen its own `<main>` without affecting the others; `/review` uses it
+  (`content--wide`, 1440px vs. the default 960px) — combined with the
+  category cell shrinking back down to just a dropdown (no more per-row
+  button crowding it), this is enough that the table no longer needs its
+  horizontal scrollbar on a normal screen.
+- Verified against a scratch copy of the actual dev database (which by
+  now has two real accounts with a mix of resolved/unresolved/ambiguous
+  rows from hand-testing): both grouped tables render with working
+  per-table forms, a bulk save resolves multiple rows (including a
+  brand-new category) in one submit, the affected table's readiness note
+  flips to "klaar voor migratie" while the other account's doesn't, and a
+  crafted `rekening_id` that isn't the current user's is rejected before
+  any row is touched.
 
-**Not yet implemented:** file upload endpoint, enrichment queries,
-migration queries, review UI, ledger viewing/reporting.
+## [0.0.10] - 2026-08-14 — `/review`: per-account tables, editable category
 
-### 2026-08-13 — Login/signup, accounts, and the upload pipeline
+- `/review` now groups rows into one table per Rekening (ordered by
+  account name, matching the backing query's existing sort) instead of a
+  single flat table across every account — each group has its own
+  opgelost/onopgelost/ambigu subtotal, plus the overall total still shown
+  above all of them. The `Rekening` column itself is gone since the group
+  heading now carries that.
+- Categorie went from a display-only column to a per-row form: a dropdown
+  of every existing category, plus a "+ nieuwe categorie…" option that
+  reveals a text input. Submitting either path
+  (`POST /review/{id}/category`, new `sql/queries/temp_afschrift/
+  set_category.sql`) sets `Afschrift_cat_ID` and always marks the row
+  `processed = 1` — picking a category is itself the resolution, whether
+  the row was unresolved, ambiguous, or already resolved differently
+  before. A typed name that already exists (case-insensitively) is reused
+  rather than creating a near-duplicate category (new
+  `sql/queries/categorieen/find_by_name.sql`); a genuinely new name goes
+  through the existing `reference_data/add_category.sql` template. The
+  update is scoped to the logged-in user by a Rekening-ownership check
+  baked into the `UPDATE`'s `WHERE` clause, not a separate lookup —
+  verified that a crafted row ID belonging to another user's account is
+  silently rejected (`rowcount == 0`, no change, warning logged).
+- Table CSS reworked for readability: full cell borders instead of just a
+  bottom rule, alternating row shading, a hover highlight, and amounts
+  right-aligned with tabular figures and colored by Af/Bij so a
+  statement's amount reads as one glanceable unit on one line instead of
+  free-floating text.
+- Verified end-to-end against a scratch copy of the dev database: both
+  category-setting paths, the dedup-on-reuse behavior, and the ownership
+  check, all called directly through `app/routes/review.py` (no browser
+  needed — `httpx`/`TestClient` aren't installed in this environment).
 
-- Added a no-password login/session system (`app/session.py`,
-  `app/routes/auth.py`, `login.html`): logging in means picking an
-  existing `Users` row, or creating one — signup requires a `Name` and a
-  `Rekening` (IBAN) together in one step, inserted atomically, since a
-  user isn't useful without at least one linked account. The session
-  cookie is signed (`itsdangerous`, via Starlette's `SessionMiddleware`)
-  using a secret generated on first run and persisted at
-  `data/.session_secret` (gitignored) — not securing a real secret, just
-  making the cookie tamper-evident.
-- Added `/accounts` (`app/routes/accounts.py`, `accounts.html`): view the
-  current user's linked accounts, link an additional one. `Rekening.name`
-  is `UNIQUE` system-wide, so linking an already-registered IBAN fails
-  with a clear error rather than silently reassigning it.
-- Added `app/importers/`: a `BaseImporter` interface plus `IngNlImporter`,
-  the first concrete parser (semicolon-delimited, quoted, comma-decimal,
-  raw `YYYYMMDD` dates — verified against a real sample export row).
-  Adding a second bank later means adding one more importer class and
-  registering it in `registry.py` — nothing else changes.
-- Decided (and documented in `docs/ARCHITECTURE.md`) that `Datum` is
-  stored as ISO `YYYY-MM-DD` in `temp_afschrift`/`afschrift` (sortable,
-  works with SQLite's date functions) and only formatted as European
-  `DD-MM-YYYY` at display time — `temp_afschrift2` keeps the bank's raw
-  `YYYYMMDD` as-is.
-- Added `sql/upload/`: `check_balance_chain.sql` (one query verifying an
-  account's confirmed + pending + newly-uploaded rows have no broken
-  balance link anywhere, using a documented ordering invariant across the
-  three tables' independent autoincrement IDs) and `check_dedup.sql`
-  (explicit duplicate-row detection, with inline date normalization since
-  `temp_afschrift2` and `temp_afschrift`/`afschrift` use different date
-  formats). Both verified against real accept/reject/duplicate scenarios
-  before moving on.
-- Added `app/upload.py`: the upload pipeline. The account in the file
-  must already be registered *and* linked to the uploading user — an
-  unknown or not-yours account is rejected outright (a deliberate
-  narrowing of the earlier "hold it for later linking" idea, once the
-  login system made "whose upload is this" answerable). Insertion is
-  all-or-nothing per account, in one DB transaction: insert the batch,
-  run both checks, commit only if both pass.
-- Added `/upload` (`app/routes/upload.py`, `upload.html`): format picker
-  (currently just ING NL) + file input, shows a per-account accept/reject
-  result with the specific reason on rejection.
-- Moved every remaining inline SQL string out of Python and into tracked
-  `.sql` files (`sql/queries/users/`, `sql/queries/rekeningen/`,
-  `sql/queries/categorieen/`, `sql/upload/insert_batch.sql`) — the
-  SQL-first rule now holds with no exceptions anywhere in the app.
-- Verified end-to-end with a real ING-shaped CSV: accepted a valid
-  2-row upload, rejected a chain-breaking row with the correct row/date
-  identified, rejected an exact re-upload as a duplicate, rejected an
-  unregistered account and a different user's account, then accepted a
-  valid continuation row — and confirmed via direct DB inspection that
-  only the 3 accepted rows exist in `temp_afschrift2`, with no leftovers
-  from any rejected attempt.
+## [0.0.9] - 2026-08-14 — Two more isolated test batches; `/review` shows everything
 
-**Not yet implemented:** enrichment queries, migration queries, review
-UI, ledger viewing/reporting.
+- Added `testdata/upload/06_batch_ambiguous.csv` (single row, Naam and
+  Mededeling each hit a different category → `processed = 2`, no
+  dependency on the second linked account) and
+  `07_batch_interne_overboeking.csv` (single row, Tegenrekening-only match
+  → `processed = 1`, Interne overboeking, no Naam/Mededeling keyword
+  involved) — isolated, one-signal-at-a-time versions of what batch 1
+  already covered combined. Both verified against a scratch copy
+  continuing the real dev database's actual balance chain.
+  `testdata/README.md` also now explains what happens to batch 1's rows
+  2/6 if the second account isn't linked yet at upload time (they don't
+  error, they just lose the internal-transfer signal and categorize
+  differently) — this is what actually happened when this was tested by
+  hand, which is what prompted adding 06/07 as an account-independent way
+  to see both cases regardless.
+- Reworked `/review` from "pending rows only, grouped per account" to a
+  single flat table of **every** `temp_afschrift` row (any `processed`
+  value) across the user's accounts, with `Rekening` and `Categorie` shown
+  by name (not ID) as explicit columns, plus an overall
+  opgelost/onopgelost/ambigu count line. Renamed the backing query
+  `sql/queries/temp_afschrift/list_pending_for_user.sql` ->
+  `list_all_for_user.sql` (dropped the `processed` filter, added a
+  `LEFT JOIN afschrift_categorien` for the category name) since it's no
+  longer just the pending subset.
 
-### 2026-08-13 — Last-login display, Dutch translation
+## [0.0.8] - 2026-08-14 — Hand-driven test data for the upload pipeline
 
-- `Users.last_logged_in` now means "when you logged in *before* this
-  session" rather than "now": the old value is captured into the session
-  at login time (`app/session.py`'s `log_in()` gained a `previous_login`
-  param), then the DB field is updated to the current time. Signup also
-  touches it, so a user's *next* login has something to show.
-- Added `app/formatting.py` (`format_date_eu`/`format_datetime_eu`),
-  registered as Jinja filters (`eu_date`/`eu_datetime`) in
-  `app/templating.py` — storage stays ISO, display converts to European
-  `DD-MM-YYYY[ HH:MM]`, consistent with the `Datum` decision already
-  documented for the ledger.
-- `/accounts` now shows "Laatste keer ingelogd" (last login) and
-  formats account-added dates the same way.
-- Translated the whole user-facing surface to Dutch: all templates
-  (`base.html`, `login.html`, `accounts.html`, `upload.html`,
-  `index.html` — including `lang="nl"`), and every user-facing string
-  generated in Python (`app/routes/auth.py`, `app/routes/accounts.py`,
-  `app/upload.py`'s rejection reasons, `app/importers/ing_nl.py`'s parse
-  errors). `docs/ARCHITECTURE.md` and `README.md` were translated too;
-  `CHANGELOG.md` and all code/SQL comments stay in English, per explicit
-  scope decision. Also fixed a leftover line on the dashboard that
-  described the old (now superseded) "unknown accounts get created
-  automatically" behavior.
-- Verified every template still renders correctly (no Jinja errors,
-  correct Dutch text, correct date formatting) against mock data,
-  without touching the live database.
+- Added `testdata/` (tracked, not gitignored — reference fixtures like
+  `sql/optional/example_keywords.sql`): `testdata/README.md` walks through
+  the whole pipeline by hand via the real running app (setup steps, an
+  upload order, and an exact expected result per file), and
+  `testdata/upload/*.csv` are the five ING-NL-format fixtures it
+  references — one clean batch exercising all three categorization
+  signals plus both unresolved and ambiguous outcomes, and one per
+  rejection reason (unregistered account, unmapped mutatiesoort, wrong
+  user, broken balance chain).
+- Every expected result in `testdata/README.md` was cross-checked by
+  actually running `process_upload()` against a scratch copy of the dev
+  database with the documented setup steps applied — not guessed.
+- Added `"vakantiegeld" -> Vakantie` to the real dev database's
+  `afschrift_cat_mededeling_keywords` (that table started out empty), so
+  batch 1 can demonstrate the Mededeling-only categorization path for
+  real, not just on a scratch copy.
 
-### 2026-08-13 — Confirmed per-account isolation of the upload checks
+## [0.0.7] - 2026-08-14 — Third categorization signal: internal transfers
 
-- A concern came up: does the balance-chain/dedup check for one account
-  get confused by another account's rows sitting physically between its
-  own in `temp_afschrift2` (whose `ID` is a single shared counter across
-  *all* accounts)? Checked the actual SQL and confirmed every branch of
-  both `check_balance_chain.sql` and `check_dedup.sql` filters by
-  `Rekening_ID`/`Rekening` *before* any ordering happens — another
-  account's rows never enter the sequence being validated at all.
-- Proved it empirically on an isolated scratch DB: uploaded account A's
-  first batch, then account B's, then A's valid continuation, then B's,
-  then a deliberately broken continuation for A — each account's chain
-  validated completely independently of the other's interleaved
-  activity, with the broken case correctly rejected against A's own
-  expected balance. No code change needed; this was already correct.
-- Tightened the "cross-table ordering" explanation in
-  `docs/ARCHITECTURE.md` (Stage 1) to say explicitly that this is always
-  per-account and why — the previous "reconstructs a valid global order"
-  phrasing was ambiguous enough to read as cross-account ordering, which
-  is exactly what prompted the concern.
+- Added a third, structurally different categorization signal alongside
+  Naam/Mededeling keywords: a row whose `Tegenrekening` resolves to
+  another `Rekening` linked to the *same* user is categorized as "Interne
+  overboeking" — not a keyword match at all, a `Rekening`-to-`Rekening`
+  lookup. Added `sql/categorization/match_internal_transfer.sql`
+  (standalone) and folded the same join into `categorize_batch.sql`'s
+  `combined_matches`, so it participates in the existing
+  0/1/2 (`processed`) combination logic exactly like the other two
+  signals — including going ambiguous if a transfer *also* happens to hit
+  a Naam/Mededeling keyword for a different category.
+  `app/categorization.py` now passes the account's `user_id` through as a
+  query param (already had it from the existing Rekening lookup, just
+  wasn't threaded through before).
+- Verified end-to-end on a scratch copy: a transfer between two of the
+  same user's own accounts → resolved to "Interne overboeking"
+  (`processed = 1`); a transfer to an unregistered/external account → no
+  match, stays unresolved; a transfer to a linked account whose Naam also
+  happens to hit an unrelated keyword → correctly ambiguous
+  (`processed = 2`).
 
-### 2026-08-14 — Categorization (`temp_afschrift2` → `temp_afschrift`)
+## [0.0.6] - 2026-08-14 — Read-only `/review` overview
+
+- Added `/review` (`app/routes/review.py`, `review.html`): lists every
+  `temp_afschrift` row still pending (`processed` 0 or 2) across the
+  logged-in user's own accounts, grouped per account with
+  unresolved/ambiguous counts. Deliberately read-only for now — no way to
+  actually resolve a row from this screen yet, that's a separate, later
+  feature (assigning a category, correcting an account, picking between
+  ambiguous matches).
+- Added `sql/queries/temp_afschrift/list_pending_for_user.sql` — joins
+  `Rekening` (to scope to the user) and `mutatiesoort` (the canonical
+  vocabulary table, not `mutatiesoort_mapping`, for a clean display name).
+- Added a `/review` nav link, and minimal `table`/`.table-scroll` CSS
+  (none existed yet) plus a `.result-ambiguous` status color alongside the
+  existing ok/fail ones.
+- Verified the query and template render correctly against a scratch
+  database seeded through the real upload+categorization pipeline (one
+  account with an unresolved row, another with an ambiguous one) — the
+  resolved row was correctly excluded from the listing.
+
+## [0.0.5] - 2026-08-14 — Categorization (`temp_afschrift2` → `temp_afschrift`)
 
 - Renamed this pipeline stage from "enrichment"/"verrijking" to
   "categorization"/"categorisering" everywhere it's a living reference
@@ -835,159 +918,144 @@ UI, ledger viewing/reporting.
 rows sitting in `temp_afschrift`, migration queries, ledger viewing/
 reporting.
 
-### 2026-08-14 — Read-only `/review` overview
+## [0.0.4] - 2026-08-13 — Confirmed per-account isolation of the upload checks
 
-- Added `/review` (`app/routes/review.py`, `review.html`): lists every
-  `temp_afschrift` row still pending (`processed` 0 or 2) across the
-  logged-in user's own accounts, grouped per account with
-  unresolved/ambiguous counts. Deliberately read-only for now — no way to
-  actually resolve a row from this screen yet, that's a separate, later
-  feature (assigning a category, correcting an account, picking between
-  ambiguous matches).
-- Added `sql/queries/temp_afschrift/list_pending_for_user.sql` — joins
-  `Rekening` (to scope to the user) and `mutatiesoort` (the canonical
-  vocabulary table, not `mutatiesoort_mapping`, for a clean display name).
-- Added a `/review` nav link, and minimal `table`/`.table-scroll` CSS
-  (none existed yet) plus a `.result-ambiguous` status color alongside the
-  existing ok/fail ones.
-- Verified the query and template render correctly against a scratch
-  database seeded through the real upload+categorization pipeline (one
-  account with an unresolved row, another with an ambiguous one) — the
-  resolved row was correctly excluded from the listing.
+- A concern came up: does the balance-chain/dedup check for one account
+  get confused by another account's rows sitting physically between its
+  own in `temp_afschrift2` (whose `ID` is a single shared counter across
+  *all* accounts)? Checked the actual SQL and confirmed every branch of
+  both `check_balance_chain.sql` and `check_dedup.sql` filters by
+  `Rekening_ID`/`Rekening` *before* any ordering happens — another
+  account's rows never enter the sequence being validated at all.
+- Proved it empirically on an isolated scratch DB: uploaded account A's
+  first batch, then account B's, then A's valid continuation, then B's,
+  then a deliberately broken continuation for A — each account's chain
+  validated completely independently of the other's interleaved
+  activity, with the broken case correctly rejected against A's own
+  expected balance. No code change needed; this was already correct.
+- Tightened the "cross-table ordering" explanation in
+  `docs/ARCHITECTURE.md` (Stage 1) to say explicitly that this is always
+  per-account and why — the previous "reconstructs a valid global order"
+  phrasing was ambiguous enough to read as cross-account ordering, which
+  is exactly what prompted the concern.
 
-### 2026-08-14 — Third categorization signal: internal transfers
+## [0.0.3] - 2026-08-13 — Last-login display, Dutch translation
 
-- Added a third, structurally different categorization signal alongside
-  Naam/Mededeling keywords: a row whose `Tegenrekening` resolves to
-  another `Rekening` linked to the *same* user is categorized as "Interne
-  overboeking" — not a keyword match at all, a `Rekening`-to-`Rekening`
-  lookup. Added `sql/categorization/match_internal_transfer.sql`
-  (standalone) and folded the same join into `categorize_batch.sql`'s
-  `combined_matches`, so it participates in the existing
-  0/1/2 (`processed`) combination logic exactly like the other two
-  signals — including going ambiguous if a transfer *also* happens to hit
-  a Naam/Mededeling keyword for a different category.
-  `app/categorization.py` now passes the account's `user_id` through as a
-  query param (already had it from the existing Rekening lookup, just
-  wasn't threaded through before).
-- Verified end-to-end on a scratch copy: a transfer between two of the
-  same user's own accounts → resolved to "Interne overboeking"
-  (`processed = 1`); a transfer to an unregistered/external account → no
-  match, stays unresolved; a transfer to a linked account whose Naam also
-  happens to hit an unrelated keyword → correctly ambiguous
-  (`processed = 2`).
+- `Users.last_logged_in` now means "when you logged in *before* this
+  session" rather than "now": the old value is captured into the session
+  at login time (`app/session.py`'s `log_in()` gained a `previous_login`
+  param), then the DB field is updated to the current time. Signup also
+  touches it, so a user's *next* login has something to show.
+- Added `app/formatting.py` (`format_date_eu`/`format_datetime_eu`),
+  registered as Jinja filters (`eu_date`/`eu_datetime`) in
+  `app/templating.py` — storage stays ISO, display converts to European
+  `DD-MM-YYYY[ HH:MM]`, consistent with the `Datum` decision already
+  documented for the ledger.
+- `/accounts` now shows "Laatste keer ingelogd" (last login) and
+  formats account-added dates the same way.
+- Translated the whole user-facing surface to Dutch: all templates
+  (`base.html`, `login.html`, `accounts.html`, `upload.html`,
+  `index.html` — including `lang="nl"`), and every user-facing string
+  generated in Python (`app/routes/auth.py`, `app/routes/accounts.py`,
+  `app/upload.py`'s rejection reasons, `app/importers/ing_nl.py`'s parse
+  errors). `docs/ARCHITECTURE.md` and `README.md` were translated too;
+  `CHANGELOG.md` and all code/SQL comments stay in English, per explicit
+  scope decision. Also fixed a leftover line on the dashboard that
+  described the old (now superseded) "unknown accounts get created
+  automatically" behavior.
+- Verified every template still renders correctly (no Jinja errors,
+  correct Dutch text, correct date formatting) against mock data,
+  without touching the live database.
 
-### 2026-08-14 — Hand-driven test data for the upload pipeline
+## [0.0.2] - 2026-08-13 — Login/signup, accounts, and the upload pipeline
 
-- Added `testdata/` (tracked, not gitignored — reference fixtures like
-  `sql/optional/example_keywords.sql`): `testdata/README.md` walks through
-  the whole pipeline by hand via the real running app (setup steps, an
-  upload order, and an exact expected result per file), and
-  `testdata/upload/*.csv` are the five ING-NL-format fixtures it
-  references — one clean batch exercising all three categorization
-  signals plus both unresolved and ambiguous outcomes, and one per
-  rejection reason (unregistered account, unmapped mutatiesoort, wrong
-  user, broken balance chain).
-- Every expected result in `testdata/README.md` was cross-checked by
-  actually running `process_upload()` against a scratch copy of the dev
-  database with the documented setup steps applied — not guessed.
-- Added `"vakantiegeld" -> Vakantie` to the real dev database's
-  `afschrift_cat_mededeling_keywords` (that table started out empty), so
-  batch 1 can demonstrate the Mededeling-only categorization path for
-  real, not just on a scratch copy.
+- Added a no-password login/session system (`app/session.py`,
+  `app/routes/auth.py`, `login.html`): logging in means picking an
+  existing `Users` row, or creating one — signup requires a `Name` and a
+  `Rekening` (IBAN) together in one step, inserted atomically, since a
+  user isn't useful without at least one linked account. The session
+  cookie is signed (`itsdangerous`, via Starlette's `SessionMiddleware`)
+  using a secret generated on first run and persisted at
+  `data/.session_secret` (gitignored) — not securing a real secret, just
+  making the cookie tamper-evident.
+- Added `/accounts` (`app/routes/accounts.py`, `accounts.html`): view the
+  current user's linked accounts, link an additional one. `Rekening.name`
+  is `UNIQUE` system-wide, so linking an already-registered IBAN fails
+  with a clear error rather than silently reassigning it.
+- Added `app/importers/`: a `BaseImporter` interface plus `IngNlImporter`,
+  the first concrete parser (semicolon-delimited, quoted, comma-decimal,
+  raw `YYYYMMDD` dates — verified against a real sample export row).
+  Adding a second bank later means adding one more importer class and
+  registering it in `registry.py` — nothing else changes.
+- Decided (and documented in `docs/ARCHITECTURE.md`) that `Datum` is
+  stored as ISO `YYYY-MM-DD` in `temp_afschrift`/`afschrift` (sortable,
+  works with SQLite's date functions) and only formatted as European
+  `DD-MM-YYYY` at display time — `temp_afschrift2` keeps the bank's raw
+  `YYYYMMDD` as-is.
+- Added `sql/upload/`: `check_balance_chain.sql` (one query verifying an
+  account's confirmed + pending + newly-uploaded rows have no broken
+  balance link anywhere, using a documented ordering invariant across the
+  three tables' independent autoincrement IDs) and `check_dedup.sql`
+  (explicit duplicate-row detection, with inline date normalization since
+  `temp_afschrift2` and `temp_afschrift`/`afschrift` use different date
+  formats). Both verified against real accept/reject/duplicate scenarios
+  before moving on.
+- Added `app/upload.py`: the upload pipeline. The account in the file
+  must already be registered *and* linked to the uploading user — an
+  unknown or not-yours account is rejected outright (a deliberate
+  narrowing of the earlier "hold it for later linking" idea, once the
+  login system made "whose upload is this" answerable). Insertion is
+  all-or-nothing per account, in one DB transaction: insert the batch,
+  run both checks, commit only if both pass.
+- Added `/upload` (`app/routes/upload.py`, `upload.html`): format picker
+  (currently just ING NL) + file input, shows a per-account accept/reject
+  result with the specific reason on rejection.
+- Moved every remaining inline SQL string out of Python and into tracked
+  `.sql` files (`sql/queries/users/`, `sql/queries/rekeningen/`,
+  `sql/queries/categorieen/`, `sql/upload/insert_batch.sql`) — the
+  SQL-first rule now holds with no exceptions anywhere in the app.
+- Verified end-to-end with a real ING-shaped CSV: accepted a valid
+  2-row upload, rejected a chain-breaking row with the correct row/date
+  identified, rejected an exact re-upload as a duplicate, rejected an
+  unregistered account and a different user's account, then accepted a
+  valid continuation row — and confirmed via direct DB inspection that
+  only the 3 accepted rows exist in `temp_afschrift2`, with no leftovers
+  from any rejected attempt.
 
-### 2026-08-14 — Two more isolated test batches; `/review` shows everything
+**Not yet implemented:** enrichment queries, migration queries, review
+UI, ledger viewing/reporting.
 
-- Added `testdata/upload/06_batch_ambiguous.csv` (single row, Naam and
-  Mededeling each hit a different category → `processed = 2`, no
-  dependency on the second linked account) and
-  `07_batch_interne_overboeking.csv` (single row, Tegenrekening-only match
-  → `processed = 1`, Interne overboeking, no Naam/Mededeling keyword
-  involved) — isolated, one-signal-at-a-time versions of what batch 1
-  already covered combined. Both verified against a scratch copy
-  continuing the real dev database's actual balance chain.
-  `testdata/README.md` also now explains what happens to batch 1's rows
-  2/6 if the second account isn't linked yet at upload time (they don't
-  error, they just lose the internal-transfer signal and categorize
-  differently) — this is what actually happened when this was tested by
-  hand, which is what prompted adding 06/07 as an account-independent way
-  to see both cases regardless.
-- Reworked `/review` from "pending rows only, grouped per account" to a
-  single flat table of **every** `temp_afschrift` row (any `processed`
-  value) across the user's accounts, with `Rekening` and `Categorie` shown
-  by name (not ID) as explicit columns, plus an overall
-  opgelost/onopgelost/ambigu count line. Renamed the backing query
-  `sql/queries/temp_afschrift/list_pending_for_user.sql` ->
-  `list_all_for_user.sql` (dropped the `processed` filter, added a
-  `LEFT JOIN afschrift_categorien` for the category name) since it's no
-  longer just the pending subset.
+## [0.0.1] - 2026-08-13 — Project scaffold
 
-### 2026-08-14 — `/review`: per-account tables, editable category
+- Set up the FastAPI + SQLite project structure: `app/` (backend),
+  `sql/` (all SQL as tracked files), `data/` (gitignored DB),
+  `logs/` (gitignored runtime logs), `docs/` (this design documentation).
+- Added `sql/schema.sql` (all tables) and `sql/seed_data.sql` (mandatory
+  reference data: categories, mutation types). Category keywords were
+  split out into `sql/optional/example_keywords.sql` since they're
+  personal to one user, not structural data every install needs.
+- Added `sql/queries/reference_data/` templates (`add_category.sql`,
+  `add_keyword.sql`, `remove_keyword.sql`) for managing categories/
+  keywords after installation, separate from the one-time seed file.
+  Category removal deliberately not provided (FK dependency on existing
+  ledger rows — see the comment in `remove_keyword.sql`).
+- Added `app/db.py`: connection handling + one-time DB init from
+  `schema.sql`/`seed_data.sql`, idempotent (`INSERT OR IGNORE`) and
+  no-ops if the database already exists.
+- Added `app/logging_config.py`: two rotating logs — `app.log`
+  (technical/runtime, also echoed to console) and `audit.log`
+  (data-changing events — currently just wired up, not yet emitting
+  business events since upload/enrichment/migration don't exist yet).
+- Added a minimal FastAPI app (`app/main.py`) with request logging
+  middleware and one placeholder dashboard page (`/`) proving the
+  database/templates/static files all wire up correctly.
+- Documented the full upload → enrichment → review → migration pipeline,
+  the `processed` status semantics (0/1/2), the per-account dedup/
+  continuity/all-or-nothing-migration rules, and the portability
+  approach in `docs/ARCHITECTURE.md`.
+- Established that all paths are relative (`app/config.py`) and the
+  database/logs are never committed, so the project can be cloned onto a
+  different machine or handed to someone else without changes.
 
-- `/review` now groups rows into one table per Rekening (ordered by
-  account name, matching the backing query's existing sort) instead of a
-  single flat table across every account — each group has its own
-  opgelost/onopgelost/ambigu subtotal, plus the overall total still shown
-  above all of them. The `Rekening` column itself is gone since the group
-  heading now carries that.
-- Categorie went from a display-only column to a per-row form: a dropdown
-  of every existing category, plus a "+ nieuwe categorie…" option that
-  reveals a text input. Submitting either path
-  (`POST /review/{id}/category`, new `sql/queries/temp_afschrift/
-  set_category.sql`) sets `Afschrift_cat_ID` and always marks the row
-  `processed = 1` — picking a category is itself the resolution, whether
-  the row was unresolved, ambiguous, or already resolved differently
-  before. A typed name that already exists (case-insensitively) is reused
-  rather than creating a near-duplicate category (new
-  `sql/queries/categorieen/find_by_name.sql`); a genuinely new name goes
-  through the existing `reference_data/add_category.sql` template. The
-  update is scoped to the logged-in user by a Rekening-ownership check
-  baked into the `UPDATE`'s `WHERE` clause, not a separate lookup —
-  verified that a crafted row ID belonging to another user's account is
-  silently rejected (`rowcount == 0`, no change, warning logged).
-- Table CSS reworked for readability: full cell borders instead of just a
-  bottom rule, alternating row shading, a hover highlight, and amounts
-  right-aligned with tabular figures and colored by Af/Bij so a
-  statement's amount reads as one glanceable unit on one line instead of
-  free-floating text.
-- Verified end-to-end against a scratch copy of the dev database: both
-  category-setting paths, the dedup-on-reuse behavior, and the ownership
-  check, all called directly through `app/routes/review.py` (no browser
-  needed — `httpx`/`TestClient` aren't installed in this environment).
-
-### 2026-08-14 — `/review`: save per table, "ready for migration" check, wider page
-
-- Replaced the per-row save button with one save button per Rekening
-  table: `POST /review/{id}/category` is gone, replaced by
-  `POST /review/{rekening_id}/save`, which reads every `cat_id_<row>` /
-  `new_category_name_<row>` field submitted by that table's single
-  `<form>` (wrapping the whole table, not just one row) and resolves each
-  the same way as before (reuse-by-name, create-if-new, always
-  `processed = 1`). The account in the URL is checked against the logged
-  -in user (new `sql/queries/rekeningen/find_by_id_for_user.sql`) before
-  anything is touched; each row update is still additionally scoped by
-  `set_category.sql`'s own ownership check.
-- After saving, the same "is every row for this account now
-  `processed = 1`?" check the future migration step will need runs
-  immediately, and the page says so under that table — "klaar voor
-  migratie naar afschrift (nog niet geïmplementeerd)" if true, "nog niet
-  alle rijen zijn opgelost" otherwise. **Nothing is migrated into
-  `afschrift` yet** — that's still Fase 4, deliberately not built here,
-  this only surfaces whether an account *would* qualify.
-- `list_all_for_user.sql` now also selects `Rekening.ID` (not just the
-  name) so the per-table form's action URL and the post-save readiness
-  check have something to key off of.
-- Added a `content_class` block to `base.html` so an individual page can
-  widen its own `<main>` without affecting the others; `/review` uses it
-  (`content--wide`, 1440px vs. the default 960px) — combined with the
-  category cell shrinking back down to just a dropdown (no more per-row
-  button crowding it), this is enough that the table no longer needs its
-  horizontal scrollbar on a normal screen.
-- Verified against a scratch copy of the actual dev database (which by
-  now has two real accounts with a mix of resolved/unresolved/ambiguous
-  rows from hand-testing): both grouped tables render with working
-  per-table forms, a bulk save resolves multiple rows (including a
-  brand-new category) in one submit, the affected table's readiness note
-  flips to "klaar voor migratie" while the other account's doesn't, and a
-  crafted `rekening_id` that isn't the current user's is rejected before
-  any row is touched.
+**Not yet implemented:** file upload endpoint, enrichment queries,
+migration queries, review UI, ledger viewing/reporting.

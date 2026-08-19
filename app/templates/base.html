@@ -43,9 +43,51 @@
       {% endif %}
     </nav>
   </header>
+  {% set info = update_info() %}
+  {% if info and not hide_update_banner %}
+    <div class="update-banner" id="update-banner" data-version="{{ info.latest_version }}" hidden>
+      <div class="update-banner__text">
+        <strong>Nieuwe versie beschikbaar: {{ info.latest_version }}</strong>
+        (je hebt {{ info.current_version }})
+        <details>
+          <summary>
+            Wat is er veranderd?
+            ({{ info.missed_entries|length }}
+            {{ "update" if info.missed_entries|length == 1 else "updates" }} gemist)
+          </summary>
+          {% for entry in info.missed_entries %}
+            <div class="update-banner__entry">
+              <strong>{{ entry.version }} — {{ entry.title }}</strong>
+              <span class="muted">({{ entry.date | eu_date }})</span>
+              <div class="update-banner__body">{{ entry.body }}</div>
+            </div>
+          {% endfor %}
+        </details>
+      </div>
+      <div class="update-banner__actions">
+        <form method="post" action="/update/apply">
+          <button type="submit">Nu bijwerken</button>
+        </form>
+        <button type="button" id="update-banner-dismiss" class="link-button">Niet nu</button>
+      </div>
+    </div>
+    <script>
+      // Moet hier inline staan (niet in het deferred bestand): laat de
+      // banner alleen zien als hij niet al voor precies déze versie is
+      // weggeklikt — anders flitst hij eerst kort in beeld voordat
+      // update_banner.js (defer, dus later) hem weer zou verbergen.
+      (function () {
+        var banner = document.getElementById("update-banner");
+        if (localStorage.getItem("boekhouding-dismissed-update") !== banner.dataset.version) {
+          banner.hidden = false;
+        }
+      })();
+    </script>
+  {% endif %}
   <main class="content {% block content_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/js/update_banner.js" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
