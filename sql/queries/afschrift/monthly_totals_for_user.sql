@@ -21,7 +21,14 @@
 -- A row with no category (Afschrift_cat_ID NULL) gets cat_id NULL and
 -- category 'Zonder categorie' — the app treats that as its own
 -- selectable pseudo-category (id "none") so uncategorized spending isn't
--- silently included or excluded from the totals.
+-- silently included or excluded from the totals. Same pattern for
+-- subcat_id/subcategorie ("Zonder subcategorie") — subcategory is always
+-- optional, so a row without one is just as normal.
+--
+-- Grouped by subcat_ID too (not just cat_ID) so the caller can filter on
+-- subcategory selection before re-aggregating back up to per-category
+-- totals — subcategory is a filter dimension only, it doesn't add its
+-- own row in the "Per categorie" table (see app/routes/dashboard.py).
 --
 -- Params: :user_id, :start, :end
 
@@ -31,12 +38,15 @@ SELECT
     r.name AS rekening_name,
     c.ID AS cat_id,
     COALESCE(c.Name, 'Zonder categorie') AS category,
+    sc.ID AS subcat_id,
+    COALESCE(sc.Name, 'Zonder subcategorie') AS subcategorie,
     COALESCE(SUM(CASE WHEN a.Af_bij = 'Bij' THEN a.Bedrag_eur ELSE 0 END), 0) AS totaal_bij,
     COALESCE(SUM(CASE WHEN a.Af_bij = 'Af' THEN a.Bedrag_eur ELSE 0 END), 0) AS totaal_af
 FROM afschrift a
 JOIN Rekening r ON r.ID = a.Rekening_ID
 LEFT JOIN afschrift_categorien c ON c.ID = a.Afschrift_cat_ID
+LEFT JOIN afschrift_subcategorien sc ON sc.ID = a.Afschrift_subcat_ID
 WHERE r.user_ID = :user_id
   AND a.Datum BETWEEN :start AND :end
-GROUP BY month, a.Rekening_ID, c.ID
+GROUP BY month, a.Rekening_ID, c.ID, sc.ID
 ORDER BY month;

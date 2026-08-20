@@ -15,11 +15,11 @@
 
 INSERT INTO afschrift
     (Datum, Naam, Rekening_ID, Tegenrekening, Code, Af_bij, Bedrag_eur,
-     Mutatiesoort_ID, Mededeling, Saldo_na_mutatie, Tag, Afschrift_cat_ID)
+     Mutatiesoort_ID, Mededeling, Saldo_na_mutatie, Tag, Afschrift_cat_ID, Afschrift_subcat_ID)
 SELECT
     t.Datum, t.Naam, t.Rekening_ID, t.Tegenrekening, t.Code, t.Af_bij,
     t.Bedrag_eur, t.Mutatiesoort_ID, t.Mededeling, t.Saldo_na_mutatie,
-    t.Tag, t.Afschrift_cat_ID
+    t.Tag, t.Afschrift_cat_ID, t.Afschrift_subcat_ID
 FROM temp_afschrift t
 JOIN Rekening r ON r.ID = t.Rekening_ID
 WHERE t.Rekening_ID = :rekening_id

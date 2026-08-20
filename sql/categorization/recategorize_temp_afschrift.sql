@@ -26,23 +26,34 @@
 -- row's same Mutatiesoort_ID — equivalent in spirit, since that mapping
 -- already canonicalizes synonymous raw labels into one mutatiesoort.
 --
+-- Afschrift_subcat_ID follows the same "only ever promoted, never
+-- silently overwritten" rule as Afschrift_cat_ID above: an already
+-- resolved row keeps its existing subcategory (manual or automatic)
+-- unless it gets promoted to ambiguous, in which case both are cleared.
+-- A row newly resolved here gets a subcategory only if the rule(s)
+-- matching its winning category agree on one (see categorize_batch.sql's
+-- subcat_summary for the exact same "agree, or leave NULL" logic).
+--
 -- Params:
 --   :user_id — only rows on this user's own Rekeningen are considered,
 --              matched only against this user's own rules
 --
--- Returns (ID, processed) for every row whose processed/Afschrift_cat_ID
--- actually changed, so the caller can tally the outcome without a second
--- query. A row that ends up in the exact same state it started in is
--- never touched (and never appears in the result).
+-- Returns (ID, processed) for every row whose processed/Afschrift_cat_ID/
+-- Afschrift_subcat_ID actually changed, so the caller can tally the
+-- outcome without a second query. A row that ends up in the exact same
+-- state it started in is never touched (and never appears in the
+-- result).
 
 WITH scope AS (
-    SELECT t.ID, t.processed AS old_processed, t.Afschrift_cat_ID AS old_cat_id
+    SELECT
+        t.ID, t.processed AS old_processed, t.Afschrift_cat_ID AS old_cat_id,
+        t.Afschrift_subcat_ID AS old_subcat_id
     FROM temp_afschrift t
     JOIN Rekening rk ON rk.ID = t.Rekening_ID
     WHERE rk.user_ID = :user_id
 ),
 rule_matches AS (
-    SELECT DISTINCT t.ID AS temp_id, r.cat_ID
+    SELECT DISTINCT t.ID AS temp_id, r.cat_ID, r.subcat_ID
     FROM temp_afschrift t
     JOIN scope s ON s.ID = t.ID
     JOIN afschrift_cat_regels r ON r.user_ID = :user_id
@@ -79,15 +90,24 @@ rule_matches AS (
     )
 ),
 match_summary AS (
-    SELECT temp_id, COUNT(*) AS match_count, MIN(cat_ID) AS single_cat_ID
+    SELECT temp_id, COUNT(DISTINCT cat_ID) AS match_count, MIN(cat_ID) AS single_cat_ID
     FROM rule_matches
     GROUP BY temp_id
+),
+subcat_summary AS (
+    -- See categorize_batch.sql's identical CTE — per (temp_id, cat_ID),
+    -- how many DISTINCT non-NULL subcat_ID's the matching rules disagree
+    -- on. Only ever consulted below for a row's winning category.
+    SELECT temp_id, cat_ID, COUNT(DISTINCT subcat_ID) AS subcat_variety, MIN(subcat_ID) AS single_subcat_ID
+    FROM rule_matches
+    GROUP BY temp_id, cat_ID
 ),
 resolution AS (
     SELECT
         s.ID AS temp_id,
         s.old_processed,
         s.old_cat_id,
+        s.old_subcat_id,
         CASE
             WHEN s.old_processed = 1 AND COALESCE(ms.match_count, 0) >= 2 THEN 2
             WHEN s.old_processed = 1 THEN s.old_processed
@@ -100,17 +120,26 @@ resolution AS (
             WHEN s.old_processed = 1 THEN s.old_cat_id
             WHEN ms.match_count = 1 THEN ms.single_cat_ID
             ELSE NULL
-        END AS new_cat_id
+        END AS new_cat_id,
+        CASE
+            WHEN s.old_processed = 1 AND COALESCE(ms.match_count, 0) >= 2 THEN NULL
+            WHEN s.old_processed = 1 THEN s.old_subcat_id
+            WHEN ms.match_count = 1 AND COALESCE(ss.subcat_variety, 0) <= 1 THEN ss.single_subcat_ID
+            ELSE NULL
+        END AS new_subcat_id
     FROM scope s
     LEFT JOIN match_summary ms ON ms.temp_id = s.ID
+    LEFT JOIN subcat_summary ss ON ss.temp_id = s.ID AND ss.cat_ID = ms.single_cat_ID
 )
 UPDATE temp_afschrift
 SET
     Afschrift_cat_ID = (SELECT new_cat_id FROM resolution WHERE resolution.temp_id = temp_afschrift.ID),
+    Afschrift_subcat_ID = (SELECT new_subcat_id FROM resolution WHERE resolution.temp_id = temp_afschrift.ID),
     processed = (SELECT new_processed FROM resolution WHERE resolution.temp_id = temp_afschrift.ID)
 WHERE ID IN (
     SELECT temp_id FROM resolution
     WHERE new_processed IS NOT old_processed
        OR new_cat_id IS NOT old_cat_id
+       OR new_subcat_id IS NOT old_subcat_id
 )
 RETURNING ID, processed;

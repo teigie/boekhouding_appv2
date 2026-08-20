@@ -38,18 +38,35 @@ def format_month_nl(value: Optional[str]) -> str:
     return f"{_MAAND_NL[int(month) - 1]} {year}"
 
 
+def _group_thousands(digits: str) -> str:
+    """"1234" -> "1.234" — shared by both amount formatters below."""
+    groups = []
+    while len(digits) > 3:
+        groups.insert(0, digits[-3:])
+        digits = digits[:-3]
+    groups.insert(0, digits)
+    return ".".join(groups)
+
+
 def format_amount_nl(value: float) -> str:
     """Canonical numeric value -> Dutch-formatted amount string ('.' for
     thousands, ',' for decimals, e.g. 1234.5 -> "1.234,50") — the reverse
     of app/categorization_rules.py::_parse_dutch_amount. Used by the
-    dashboard's CSV export (app/routes/dashboard.py::export_csv): a comma
-    decimal only reads as numeric in a Dutch-locale spreadsheet, a dot
-    would show up as text."""
+    dashboard's CSV export (a comma decimal only reads as numeric in a
+    Dutch-locale spreadsheet, a dot would show up as text) and, as the
+    `bedrag_nl` Jinja filter (app/templating.py), by every on-screen euro
+    amount — dashboard totals, tables, the chart tooltip, /review, the
+    profile page's "laatste boeking"."""
     sign = "-" if value < 0 else ""
     whole, _, frac = f"{abs(value):.2f}".partition(".")
-    groups = []
-    while len(whole) > 3:
-        groups.insert(0, whole[-3:])
-        whole = whole[:-3]
-    groups.insert(0, whole)
-    return f"{sign}{'.'.join(groups)},{frac}"
+    return f"{sign}{_group_thousands(whole)},{frac}"
+
+
+def format_amount_nl_whole(value: float) -> str:
+    """Same thousands-grouping as format_amount_nl, but rounded to a
+    whole number with no decimals — used for the dashboard chart's y-axis
+    gridline labels (app/templating.py's `bedrag_nl_whole` filter), where
+    exact cents would just clutter a compact scale label."""
+    sign = "-" if value < 0 else ""
+    whole = str(round(abs(value)))
+    return f"{sign}{_group_thousands(whole)}"

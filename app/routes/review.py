@@ -37,6 +37,7 @@ from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
 from app.migration import NotFullyResolvedError, migrate_account
 from app.session import require_login
+from app.subcategories import resolve_or_create_subcategory
 from app.templating import templates
 
 log = get_app_logger()
@@ -49,6 +50,7 @@ _SET_CATEGORY_SQL = (SQL_DIR / "queries" / "temp_afschrift" / "set_category.sql"
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _FIND_CATEGORY_SQL = (SQL_DIR / "queries" / "categorieen" / "find_by_name.sql").read_text(encoding="utf-8")
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
+_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _FIND_REKENING_FOR_USER_SQL = (
     SQL_DIR / "queries" / "rekeningen" / "find_by_id_for_user.sql"
 ).read_text(encoding="utf-8")
@@ -129,6 +131,7 @@ def review_page(
     try:
         rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
         categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategories = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
@@ -139,6 +142,7 @@ def review_page(
             "groups": _grouped_by_rekening(rows, selected_statuses),
             "counts": _counts(rows),
             "categories": categories,
+            "subcategories": subcategories,
             "selected_statuses": selected_statuses,
         },
     )
@@ -161,6 +165,7 @@ def review_recategorize(request: Request):
     try:
         rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
         categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategories = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
@@ -171,6 +176,7 @@ def review_recategorize(request: Request):
             "groups": _grouped_by_rekening(rows),
             "counts": _counts(rows),
             "categories": categories,
+            "subcategories": subcategories,
             "selected_statuses": set(_ALL_STATUSES),
             "recategorization": recategorization,
             "recategorize_ran": True,
@@ -206,8 +212,12 @@ async def save_categories(request: Request, rekening_id: int):
             resolved_cat_id = _resolve_category_id(conn, user["id"], cat_id_raw, new_name_raw)
             if resolved_cat_id is None:
                 continue
+            resolved_subcat_id = resolve_or_create_subcategory(
+                conn, user["id"], form.get(f"subcat_id_{row_id}", ""), form.get(f"new_subcategory_name_{row_id}", "")
+            )
             cursor = conn.execute(
-                _SET_CATEGORY_SQL, {"id": row_id, "cat_id": resolved_cat_id, "user_id": user["id"]}
+                _SET_CATEGORY_SQL,
+                {"id": row_id, "cat_id": resolved_cat_id, "subcat_id": resolved_subcat_id, "user_id": user["id"]},
             )
             if cursor.rowcount:
                 saved += 1
@@ -250,6 +260,7 @@ def migrate_to_afschrift(request: Request, rekening_id: int):
         try:
             rows = conn.execute(_LIST_ALL_SQL, {"user_id": user["id"]}).fetchall()
             categories = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+            subcategories = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
         finally:
             conn.close()
         error = (
@@ -264,6 +275,7 @@ def migrate_to_afschrift(request: Request, rekening_id: int):
                 "groups": _grouped_by_rekening(rows),
                 "counts": _counts(rows),
                 "categories": categories,
+                "subcategories": subcategories,
                 "selected_statuses": set(_ALL_STATUSES),
                 "error": error,
             },

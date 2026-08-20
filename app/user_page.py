@@ -20,6 +20,7 @@ _LATEST_ENTRY_SQL = (
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 
 
 def user_page_url(username: str) -> str:
@@ -32,14 +33,18 @@ def user_page_url(username: str) -> str:
 
 def _group_regels_by_category(rows) -> dict:
     """The flat (regel, kolom, keyword) rows from list_for_user.sql,
-    nested into cat_ID -> [ {"ID": regel_ID, "kolommen": [
-    {"ID", "kolom", "combine_mode", "keywords": [{"ID", "keyword"}, ...]}
-    , ...]} , ...]. Dict insertion order (Python 3.7+) keeps the original
-    regel_ID/kolom_ID/keyword_ID ordering from the query intact."""
+    nested into cat_ID -> [ {"ID": regel_ID, "subcat_ID", "subcat_name",
+    "kolommen": [{"ID", "kolom", "combine_mode", "keywords": [{"ID",
+    "keyword"}, ...]}, ...]} , ...]. Dict insertion order (Python 3.7+)
+    keeps the original regel_ID/kolom_ID/keyword_ID ordering from the
+    query intact."""
     regels_by_cat: dict = {}
     for row in rows:
         regels = regels_by_cat.setdefault(row["cat_ID"], {})
-        regel = regels.setdefault(row["regel_ID"], {"ID": row["regel_ID"], "kolommen": {}})
+        regel = regels.setdefault(
+            row["regel_ID"],
+            {"ID": row["regel_ID"], "subcat_ID": row["subcat_ID"], "subcat_name": row["subcat_name"], "kolommen": {}},
+        )
         kolom = regel["kolommen"].setdefault(
             row["kolom_ID"],
             {"ID": row["kolom_ID"], "kolom": row["kolom"], "combine_mode": row["combine_mode"], "keywords": []},
@@ -47,7 +52,10 @@ def _group_regels_by_category(rows) -> dict:
         kolom["keywords"].append({"ID": row["keyword_ID"], "keyword": row["keyword"]})
 
     return {
-        cat_id: [{"ID": r["ID"], "kolommen": list(r["kolommen"].values())} for r in regels.values()]
+        cat_id: [
+            {"ID": r["ID"], "subcat_ID": r["subcat_ID"], "subcat_name": r["subcat_name"], "kolommen": list(r["kolommen"].values())}
+            for r in regels.values()
+        ]
         for cat_id, regels in regels_by_cat.items()
     }
 
@@ -81,6 +89,7 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
     regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
     regels_by_cat = _group_regels_by_category(regel_rows)
+    subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user_id}).fetchall()
 
     categorieen_out = [
         {"ID": c["ID"], "Name": c["Name"], "regels": regels_by_cat.get(c["ID"], [])} for c in categorieen
@@ -94,4 +103,5 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
         "categorieen": categorieen_out,
         "suggesties": suggesties,
         "regel_kolommen": REGEL_KOLOMMEN,
+        "subcategorieen": subcategorieen,
     }

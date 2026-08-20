@@ -50,6 +50,20 @@
         </div>
       {% endif %}
 
+      {% if subcategorieen %}
+        <p class="muted" style="margin-top: 1rem; margin-bottom: 0.35rem;">Subcategorieën meetellen</p>
+        <div class="table-actions" style="gap: 0.5rem; margin-bottom: 0.5rem;">
+          <button type="button" class="chip checkbox-toggle-btn" data-check-group="subcat_ids" data-check-action="all">Alles selecteren</button>
+          <button type="button" class="chip checkbox-toggle-btn" data-check-group="subcat_ids" data-check-action="none">Alles deselecteren</button>
+        </div>
+        <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
+          {% for sc in subcategorieen %}
+            <label><input type="checkbox" name="subcat_ids" value="{{ sc['ID'] }}" {{ "checked" if sc['ID']|string in selected_subcat_ids }}> {{ sc["Name"] }}</label>
+          {% endfor %}
+          <label><input type="checkbox" name="subcat_ids" value="none" {{ "checked" if "none" in selected_subcat_ids }}> Zonder subcategorie</label>
+        </div>
+      {% endif %}
+
       <p class="muted" style="margin-top: 1rem; margin-bottom: 0.35rem;">Lijnen in de grafiek</p>
       <div class="table-actions" style="gap: 0.5rem; margin-bottom: 0.5rem;">
         <button type="button" class="chip checkbox-toggle-btn" data-check-group="graph_lines" data-check-action="all">Alles selecteren</button>
@@ -68,16 +82,16 @@
   <div class="grid" style="margin-top: 1.5rem;">
     <section class="card">
       <h2>Inkomsten</h2>
-      <p class="amount-bij" style="font-size: 1.5rem; margin: 0;">+ € {{ "%.2f"|format(totaal_inkomsten) }}</p>
+      <p class="amount-bij" style="font-size: 1.5rem; margin: 0;">+ € {{ totaal_inkomsten|bedrag_nl }}</p>
     </section>
     <section class="card">
       <h2>Uitgaven</h2>
-      <p class="amount-af" style="font-size: 1.5rem; margin: 0;">− € {{ "%.2f"|format(totaal_uitgaven) }}</p>
+      <p class="amount-af" style="font-size: 1.5rem; margin: 0;">− € {{ totaal_uitgaven|bedrag_nl }}</p>
     </section>
     <section class="card">
       <h2>Saldo (verschil)</h2>
       <p class="{{ 'amount-bij' if verschil >= 0 else 'amount-af' }}" style="font-size: 1.5rem; margin: 0;">
-        {{ "+" if verschil >= 0 else "−" }} € {{ "%.2f"|format(verschil|abs) }}
+        {{ "+" if verschil >= 0 else "−" }} € {{ (verschil|abs)|bedrag_nl }}
       </p>
     </section>
   </div>
@@ -91,7 +105,7 @@
              data-months="{{ months_json }}" role="img" aria-label="Lijngrafiek van geselecteerde bedragen per maand">
           {% for t in chart.y_ticks %}
             <line class="chart-grid" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ t.y }}" y2="{{ t.y }}"></line>
-            <text class="chart-axis-label" x="{{ chart.plot.x0 - 8 }}" y="{{ t.y + 3 }}" text-anchor="end">€ {{ "%.0f"|format(t.value) }}</text>
+            <text class="chart-axis-label" x="{{ chart.plot.x0 - 8 }}" y="{{ t.y + 3 }}" text-anchor="end">€ {{ t.value|bedrag_nl_whole }}</text>
           {% endfor %}
           {% if chart.zero_y is not none %}
             <line class="chart-zero" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ chart.zero_y }}" y2="{{ chart.zero_y }}"></line>
@@ -107,9 +121,9 @@
                       points="{% for p in s.points %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
             {% for p in s.points %}
               <circle class="chart-point" style="fill: var({{ s.color_var }});" cx="{{ p.x }}" cy="{{ p.y }}" r="4"
-                      data-month="{{ p.month }}" data-value="{{ '%.2f'|format(p.value) }}"
+                      data-month="{{ p.month }}" data-value="{{ p.value|bedrag_nl }}"
                       data-label="{{ s.label }}" data-color-var="{{ s.color_var }}">
-                <title>{{ s.label }} — {{ p.month|maand_nl }}: € {{ "%.2f"|format(p.value) }}</title>
+                <title>{{ s.label }} — {{ p.month|maand_nl }}: € {{ p.value|bedrag_nl }}</title>
               </circle>
             {% endfor %}
           {% endfor %}
@@ -153,8 +167,8 @@
             {% for c in categorie_rows %}
               <tr class="category-row" data-cat-target="cat-statements-{{ c.key }}" tabindex="0" role="button" aria-expanded="false">
                 <td><span class="category-chevron">▸</span> {{ c["category"] }}</td>
-                <td class="col-amount amount-bij">€ {{ "%.2f"|format(c["totaal_bij"]) }}</td>
-                <td class="col-amount amount-af">€ {{ "%.2f"|format(c["totaal_af"]) }}</td>
+                <td class="col-amount amount-bij">€ {{ c["totaal_bij"]|bedrag_nl }}</td>
+                <td class="col-amount amount-af">€ {{ c["totaal_af"]|bedrag_nl }}</td>
               </tr>
               <tr class="category-detail-row" id="cat-statements-{{ c.key }}" hidden>
                 <td colspan="3">
@@ -167,6 +181,7 @@
                             <th>Rekening</th>
                             <th>Naam</th>
                             <th>Mededeling</th>
+                            <th>Subcategorie</th>
                             <th class="col-amount">Bedrag</th>
                           </tr>
                         </thead>
@@ -177,8 +192,9 @@
                               <td>{{ s["rekening_name"] }}</td>
                               <td>{{ s["Naam"] }}</td>
                               <td class="col-wrap">{{ s["Mededeling"] or "" }}</td>
+                              <td>{{ s["subcategorie"] }}</td>
                               <td class="col-amount {{ 'amount-af' if s['Af_bij'] == 'Af' else 'amount-bij' }}">
-                                {{ "−" if s["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(s["Bedrag_eur"]) }}
+                                {{ "−" if s["Af_bij"] == "Af" else "+" }}€ {{ s["Bedrag_eur"]|bedrag_nl }}
                               </td>
                             </tr>
                           {% endfor %}

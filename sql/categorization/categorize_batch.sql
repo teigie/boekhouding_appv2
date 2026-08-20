@@ -20,6 +20,16 @@
 --   0 = no rule matched — needs a manual category
 --   1 = exactly one category matched (by one or more of its rules) — eligible for migration
 --   2 = more than one category matched — ambiguous, needs a manual pick
+-- This is based ONLY on distinct cat_ID — entirely unchanged by
+-- subcategories below.
+--
+-- Afschrift_subcat_ID is resolved separately and never affects the above:
+-- among the rule(s) that matched the winning category, if they agree on
+-- one subcategory (or only one of them sets one — NULLs are ignored) it's
+-- assigned; if they genuinely disagree (2+ different non-NULL
+-- subcat_ID's), it's simply left NULL rather than making the row
+-- ambiguous — subcategory is always optional/best-effort, never blocking
+-- (see sql/schema.sql).
 --
 -- Must run against an account's FULL current temp_afschrift2 backlog,
 -- immediately followed by clear_temp_afschrift2.sql for the same account,
@@ -36,7 +46,7 @@
 WITH rule_matches AS (
     -- See sql/categorization/match_custom_rules.sql for the standalone,
     -- documented copy of this exact logic.
-    SELECT DISTINCT t.ID AS temp_id, r.cat_ID
+    SELECT DISTINCT t.ID AS temp_id, r.cat_ID, r.subcat_ID
     FROM temp_afschrift2 t
     JOIN afschrift_cat_regels r ON r.user_ID = :user_id
     WHERE t.Rekening = :rekening_text
@@ -69,13 +79,21 @@ WITH rule_matches AS (
       )
 ),
 match_summary AS (
-    SELECT temp_id, COUNT(*) AS match_count, MIN(cat_ID) AS single_cat_ID
+    SELECT temp_id, COUNT(DISTINCT cat_ID) AS match_count, MIN(cat_ID) AS single_cat_ID
     FROM rule_matches
     GROUP BY temp_id
+),
+subcat_summary AS (
+    -- Per (temp_id, cat_ID): how many DISTINCT non-NULL subcat_ID's did
+    -- the rules matching that category disagree on. Only ever consulted
+    -- below for the row's single winning category (match_count = 1).
+    SELECT temp_id, cat_ID, COUNT(DISTINCT subcat_ID) AS subcat_variety, MIN(subcat_ID) AS single_subcat_ID
+    FROM rule_matches
+    GROUP BY temp_id, cat_ID
 )
 INSERT INTO temp_afschrift
     (Datum, Naam, Rekening_ID, Tegenrekening, Code, Af_bij, Bedrag_eur,
-     Mutatiesoort_ID, Mededeling, Saldo_na_mutatie, Tag, Afschrift_cat_ID, processed)
+     Mutatiesoort_ID, Mededeling, Saldo_na_mutatie, Tag, Afschrift_cat_ID, Afschrift_subcat_ID, processed)
 SELECT
     substr(t.Datum, 1, 4) || '-' || substr(t.Datum, 5, 2) || '-' || substr(t.Datum, 7, 2),
     t.Naam,
@@ -89,6 +107,7 @@ SELECT
     t.Saldo_na_mutatie,
     t.Tag,
     CASE WHEN ms.match_count = 1 THEN ms.single_cat_ID ELSE NULL END,
+    CASE WHEN ms.match_count = 1 AND ss.subcat_variety <= 1 THEN ss.single_subcat_ID ELSE NULL END,
     CASE
         WHEN ms.match_count IS NULL OR ms.match_count = 0 THEN 0
         WHEN ms.match_count = 1 THEN 1
@@ -97,6 +116,7 @@ SELECT
 FROM temp_afschrift2 t
 LEFT JOIN mutatiesoort_mapping mm ON mm.Name = t.Mutatiesoort
 LEFT JOIN match_summary ms ON ms.temp_id = t.ID
+LEFT JOIN subcat_summary ss ON ss.temp_id = t.ID AND ss.cat_ID = ms.single_cat_ID
 WHERE t.Rekening = :rekening_text
 ORDER BY t.ID
 RETURNING processed;

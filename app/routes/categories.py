@@ -24,6 +24,7 @@ from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
 from app.session import require_login
+from app.subcategories import resolve_or_create_subcategory
 from app.templating import templates
 from app.user_page import load_user_page_data, user_page_url
 
@@ -52,6 +53,24 @@ _ADD_REGEL_KEYWORD_SQL = (
 ).read_text(encoding="utf-8")
 _REMOVE_REGEL_KOLOMMEN_FOR_REGEL_SQL = (
     SQL_DIR / "queries" / "reference_data" / "remove_regel_kolommen_for_regel.sql"
+).read_text(encoding="utf-8")
+_SET_REGEL_SUBCATEGORY_SQL = (
+    SQL_DIR / "queries" / "reference_data" / "set_regel_subcategory.sql"
+).read_text(encoding="utf-8")
+
+_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
+_FIND_SUBCATEGORY_BY_NAME_SQL = (
+    SQL_DIR / "queries" / "subcategorieen" / "find_by_name.sql"
+).read_text(encoding="utf-8")
+_FIND_SUBCATEGORY_FOR_USER_SQL = (
+    SQL_DIR / "queries" / "subcategorieen" / "find_by_id_for_user.sql"
+).read_text(encoding="utf-8")
+_COUNT_SUBCATEGORY_USAGE_SQL = (
+    SQL_DIR / "queries" / "subcategorieen" / "count_usage_for_user.sql"
+).read_text(encoding="utf-8")
+_ADD_SUBCATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_subcategory.sql").read_text(encoding="utf-8")
+_REMOVE_SUBCATEGORY_SQL = (
+    SQL_DIR / "queries" / "reference_data" / "remove_subcategory.sql"
 ).read_text(encoding="utf-8")
 
 
@@ -148,6 +167,98 @@ def delete_category(request: Request, cat_id: int):
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
+@router.post("/subcategories")
+def add_subcategory(request: Request, name: str = Form(...)):
+    """Adds a subcategory to the user's one shared list (not scoped to a
+    category, see sql/schema.sql) — same reuse-by-name-or-reject pattern
+    as add_category above."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    name = name.strip()
+    conn = get_connection()
+    try:
+        error = None
+        if not name:
+            error = "Een subcategorienaam is verplicht."
+        else:
+            existing = conn.execute(
+                _FIND_SUBCATEGORY_BY_NAME_SQL, {"user_id": user["id"], "name": name}
+            ).fetchone()
+            if existing:
+                error = f"Subcategorie '{name}' bestaat al."
+            else:
+                try:
+                    conn.execute(_ADD_SUBCATEGORY_SQL, {"name": name, "user_id": user["id"]})
+                    conn.commit()
+                except sqlite3.IntegrityError:
+                    conn.rollback()
+                    error = f"Subcategorie '{name}' bestaat al."
+
+        if error:
+            data = load_user_page_data(conn, user["id"])
+    finally:
+        conn.close()
+
+    if error:
+        log.warning("Failed to add subcategory for user %s: %s", user["id"], error)
+        return templates.TemplateResponse(
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
+        )
+    audit.info("Subcategory '%s' added by user %s", name, user["id"])
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+
+@router.post("/subcategories/{subcat_id}/delete")
+def delete_subcategory(request: Request, subcat_id: int):
+    """Removes a subcategory the user owns — blocked (same as
+    delete_category) if it's still in use on any ledger row; a rule that
+    merely assigns it just loses that assignment (ON DELETE SET NULL, see
+    sql/schema.sql), which isn't checked here."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        subcategory = conn.execute(
+            _FIND_SUBCATEGORY_FOR_USER_SQL, {"id": subcat_id, "user_id": user["id"]}
+        ).fetchone()
+        if subcategory is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+        usage = conn.execute(
+            _COUNT_SUBCATEGORY_USAGE_SQL, {"subcat_id": subcat_id, "user_id": user["id"]}
+        ).fetchone()
+        error = None
+        if usage["usage_count"] > 0:
+            error = (
+                f"Subcategorie '{subcategory['Name']}' is nog in gebruik bij {usage['usage_count']} "
+                "rij(en) en kan niet verwijderd worden."
+            )
+        else:
+            try:
+                conn.execute(_REMOVE_SUBCATEGORY_SQL, {"subcat_id": subcat_id, "user_id": user["id"]})
+                conn.commit()
+            except sqlite3.IntegrityError:
+                conn.rollback()
+                error = f"Subcategorie '{subcategory['Name']}' is nog in gebruik en kan niet verwijderd worden."
+
+        if error:
+            data = load_user_page_data(conn, user["id"])
+    finally:
+        conn.close()
+
+    if error:
+        log.warning("Failed to delete subcategory %s for user %s: %s", subcat_id, user["id"], error)
+        return templates.TemplateResponse(
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
+        )
+    audit.info("Subcategory '%s' (%s) deleted by user %s", subcategory["Name"], subcat_id, user["id"])
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+
 @router.post("/categories/{cat_id}/regels")
 async def add_regel(request: Request, cat_id: int):
     """Create a new rule under a category from the profile page's
@@ -167,6 +278,10 @@ async def add_regel(request: Request, cat_id: int):
         category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
         if category is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+        subcat_id = resolve_or_create_subcategory(
+            conn, user["id"], form.get("subcat_id", ""), form.get("new_subcategory_name", "")
+        )
 
         columns = []  # [(kolom, combine_mode, [keyword, ...]), ...]
         error = None
@@ -189,7 +304,9 @@ async def add_regel(request: Request, cat_id: int):
 
         if error is None:
             try:
-                cursor = conn.execute(_ADD_REGEL_SQL, {"cat_id": cat_id, "user_id": user["id"]})
+                cursor = conn.execute(
+                    _ADD_REGEL_SQL, {"cat_id": cat_id, "subcat_id": subcat_id, "user_id": user["id"]}
+                )
                 regel_id = cursor.lastrowid
                 for kolom, mode, keywords in columns:
                     kolom_cursor = conn.execute(
@@ -254,12 +371,18 @@ def edit_regel_page(request: Request, regel_id: int):
         if regel is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
         rows = conn.execute(_LIST_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]}).fetchall()
+        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
     return templates.TemplateResponse(
         request, "regel_edit.html",
-        {"user": user, "regel": regel, "current": _current_columns_map(rows), "regel_kolommen": REGEL_KOLOMMEN},
+        {
+            "user": user, "regel": regel, "current": _current_columns_map(rows),
+            "regel_kolommen": REGEL_KOLOMMEN, "subcategorieen": subcategorieen,
+            "submitted_subcat_id": str(regel["subcat_ID"]) if regel["subcat_ID"] is not None else "",
+            "submitted_new_subcategory_name": "",
+        },
     )
 
 
@@ -282,6 +405,11 @@ async def save_regel(request: Request, regel_id: int):
         regel = conn.execute(_FIND_REGEL_FOR_USER_SQL, {"id": regel_id, "user_id": user["id"]}).fetchone()
         if regel is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        submitted_subcat_id = form.get("subcat_id", "")
+        submitted_new_subcategory_name = form.get("new_subcategory_name", "")
+        subcat_id = resolve_or_create_subcategory(conn, user["id"], submitted_subcat_id, submitted_new_subcategory_name)
 
         columns = []  # [(kolom, combine_mode, [keyword, ...]), ...]
         submitted = {}  # kolom -> {"mode", "keywords_text"} as typed, for re-render on error
@@ -308,6 +436,9 @@ async def save_regel(request: Request, regel_id: int):
 
         if error is None:
             try:
+                conn.execute(
+                    _SET_REGEL_SUBCATEGORY_SQL, {"regel_id": regel_id, "subcat_id": subcat_id, "user_id": user["id"]}
+                )
                 conn.execute(_REMOVE_REGEL_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]})
                 for kolom, mode, keywords in columns:
                     kolom_cursor = conn.execute(
@@ -331,7 +462,11 @@ async def save_regel(request: Request, regel_id: int):
         log.warning("Failed to save rule %s for user %s: %s", regel_id, user["id"], error)
         return templates.TemplateResponse(
             request, "regel_edit.html",
-            {"user": user, "regel": regel, "current": submitted, "regel_kolommen": REGEL_KOLOMMEN, "error": error},
+            {
+                "user": user, "regel": regel, "current": submitted, "regel_kolommen": REGEL_KOLOMMEN,
+                "subcategorieen": subcategorieen, "submitted_subcat_id": submitted_subcat_id,
+                "submitted_new_subcategory_name": submitted_new_subcategory_name, "error": error,
+            },
             status_code=400,
         )
     audit.info("Rule %s saved by user %s (%d column condition(s))", regel_id, user["id"], len(columns))

@@ -98,6 +98,7 @@
                     <th class="col-amount">Bedrag</th>
                     <th>Mutatiesoort</th>
                     <th>Categorie</th>
+                    <th>Subcategorie</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -108,7 +109,7 @@
                       <td>{{ row["Naam"] }}</td>
                       <td class="col-wrap">{{ row["Mededeling"] or "" }}</td>
                       <td class="col-amount {{ 'amount-af' if row['Af_bij'] == 'Af' else 'amount-bij' }}">
-                        {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(row["Bedrag_eur"]) }}
+                        {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ row["Bedrag_eur"]|bedrag_nl }}
                       </td>
                       <td>{{ row["Mutatiesoort"] }}</td>
                       <td class="category-cell">
@@ -128,6 +129,26 @@
                           name="new_category_name_{{ row['ID'] }}"
                           placeholder="Naam nieuwe categorie"
                           class="category-new"
+                          style="display: none;"
+                        >
+                      </td>
+                      <td class="category-cell">
+                        <select
+                          name="subcat_id_{{ row['ID'] }}"
+                          class="subcategory-select"
+                          onchange="this.closest('td').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+                        >
+                          <option value="" {{ "selected" if not row["Subcategorie"] }}>— geen —</option>
+                          {% for sc in subcategories %}
+                            <option value="{{ sc['ID'] }}" {{ "selected" if sc["Name"] == row["Subcategorie"] }}>{{ sc["Name"] }}</option>
+                          {% endfor %}
+                          <option value="__new__">+ nieuwe subcategorie…</option>
+                        </select>
+                        <input
+                          type="text"
+                          name="new_subcategory_name_{{ row['ID'] }}"
+                          placeholder="Naam nieuwe subcategorie"
+                          class="subcategory-new"
                           style="display: none;"
                         >
                       </td>

@@ -33,12 +33,17 @@
 -- embeds the same logic itself rather than including this file, since
 -- SQLite has no cross-file inclusion.
 --
+-- r.subcat_ID is carried along here too (a rule's own optional
+-- subcategory assignment) — categorize_batch.sql resolves it into
+-- Afschrift_subcat_ID separately, without affecting the cat_ID-based
+-- ambiguity outcome below (see that file's subcat_summary CTE).
+--
 -- Params:
 --   :rekening_text — raw account text as it appears in temp_afschrift2.Rekening
 --   :user_id       — owning user of :rekening_text — scopes which rules
 --                     can match, since rules are per-user
 
-SELECT DISTINCT t.ID AS temp_id, r.cat_ID
+SELECT DISTINCT t.ID AS temp_id, r.cat_ID, r.subcat_ID
 FROM temp_afschrift2 t
 JOIN afschrift_cat_regels r ON r.user_ID = :user_id
 WHERE t.Rekening = :rekening_text

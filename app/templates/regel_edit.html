@@ -18,7 +18,28 @@
       "1.234,56" op de eerste regel, "99,95" op de tweede).
     </p>
     <form method="post" action="/categories/regels/{{ regel['ID'] }}/edit">
-      <div class="grid">
+      <label>Subcategorie (optioneel)<br>
+        <select
+          name="subcat_id"
+          class="subcategory-select"
+          onchange="this.closest('form').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+        >
+          <option value="" {{ "selected" if not submitted_subcat_id }}>— geen subcategorie —</option>
+          {% for sc in subcategorieen %}
+            <option value="{{ sc['ID'] }}" {{ "selected" if submitted_subcat_id == sc['ID']|string }}>{{ sc["Name"] }}</option>
+          {% endfor %}
+          <option value="__new__" {{ "selected" if submitted_subcat_id == "__new__" }}>+ nieuwe subcategorie…</option>
+        </select>
+      </label>
+      <input
+        type="text"
+        name="new_subcategory_name"
+        value="{{ submitted_new_subcategory_name }}"
+        placeholder="Naam nieuwe subcategorie"
+        class="subcategory-new"
+        style="display: {{ 'inline-block' if submitted_subcat_id == '__new__' else 'none' }};"
+      >
+      <div class="grid" style="margin-top: 0.75rem;">
         {% for kolom in regel_kolommen %}
           {% set huidig = current.get(kolom.name, {}) %}
           <div>

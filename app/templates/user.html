@@ -17,7 +17,7 @@
                 {% if r.latest_entry %}
                   Laatste boeking: {{ r.latest_entry["Datum"] | eu_date }} — {{ r.latest_entry["Naam"] }}
                   <span class="{{ 'amount-af' if r.latest_entry['Af_bij'] == 'Af' else 'amount-bij' }}">
-                    {{ "−" if r.latest_entry["Af_bij"] == "Af" else "+" }}€ {{ "%.2f"|format(r.latest_entry["Bedrag_eur"]) }}
+                    {{ "−" if r.latest_entry["Af_bij"] == "Af" else "+" }}€ {{ r.latest_entry["Bedrag_eur"]|bedrag_nl }}
                   </span>
                   {% if r.latest_entry["bron"] == "temp_afschrift" %}
                     <span class="chip" style="margin-left: 0.4rem;">nog niet gemigreerd</span>
@@ -102,6 +102,34 @@
     {% endif %}
   </section>
 
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Subcategorieën</h2>
+    <p class="muted">
+      Eén gedeelde lijst, niet gebonden aan één categorie — dezelfde
+      subcategorie kies je onder elke categorie, bij een regel of op
+      <a href="/review">Controle</a>. Altijd optioneel: een categorie of
+      rij zonder subcategorie is een normale, geldige staat.
+    </p>
+    {% if subcategorieen %}
+      <div class="table-actions" style="flex-wrap: wrap;">
+        {% for sc in subcategorieen %}
+          <span class="chip">
+            {{ sc["Name"] }}
+            <form method="post" action="/subcategories/{{ sc['ID'] }}/delete" class="inline-form">
+              <button type="submit" class="link-button">×</button>
+            </form>
+          </span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Nog geen subcategorieën.</p>
+    {% endif %}
+    <form method="post" action="/subcategories" style="margin-top: 1rem;">
+      <label>Naam<br><input type="text" name="name" required placeholder="bijv. Weekboodschappen"></label>
+      <button type="submit">Subcategorie toevoegen</button>
+    </form>
+  </section>
+
   {% if not categorieen %}
     <section class="card" style="margin-top: 1.5rem;">
       <p class="muted">Nog geen categorieën — voeg er hierboven een toe, of kies een suggestie.</p>
@@ -120,7 +148,7 @@
           {% for regel in c.regels %}
             <div class="card" style="margin-top: 0.75rem; background: var(--bg);">
               <div class="table-actions" style="justify-content: space-between;">
-                <strong>Regel {{ loop.index }}</strong>
+                <strong>Regel {{ loop.index }}{{ " → " ~ regel.subcat_name if regel.subcat_name }}</strong>
                 <span class="table-actions" style="gap: 0.5rem;">
                   <a href="/categories/regels/{{ regel.ID }}/edit" class="chip">Aanpassen</a>
                   <form method="post" action="/categories/regels/{{ regel.ID }}/delete" class="inline-form">
@@ -154,7 +182,27 @@
               elke regel als één bedrag (bijv. "1.234,56" op de eerste
               regel, "99,95" op de tweede).
             </p>
-            <div class="grid">
+            <label>Subcategorie (optioneel)<br>
+              <select
+                name="subcat_id"
+                class="subcategory-select"
+                onchange="this.closest('form').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+              >
+                <option value="" selected>— geen subcategorie —</option>
+                {% for sc in subcategorieen %}
+                  <option value="{{ sc['ID'] }}">{{ sc["Name"] }}</option>
+                {% endfor %}
+                <option value="__new__">+ nieuwe subcategorie…</option>
+              </select>
+            </label>
+            <input
+              type="text"
+              name="new_subcategory_name"
+              placeholder="Naam nieuwe subcategorie"
+              class="subcategory-new"
+              style="display: none;"
+            >
+            <div class="grid" style="margin-top: 0.75rem;">
               {% for kolom in regel_kolommen %}
                 <div>
                   <label>{{ kolom.label }}<br>

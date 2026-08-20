@@ -51,6 +51,20 @@ create table afschrift_categorie_suggesties (
 	Name varchar(30) not null unique
 );
 
+-- Subcategories: unlike afschrift_categorien, this is deliberately ONE
+-- shared per-user list, not scoped to a single category — the same
+-- subcategory can be picked under any of a user's categories (confirmed
+-- with the user rather than assumed; see CHANGELOG). Always optional
+-- everywhere it's used (on a regel, on a temp_afschrift/afschrift row) —
+-- "no subcategory" is a normal, expected state, never an error.
+create table afschrift_subcategorien (
+	ID integer primary key autoincrement,
+	Name varchar(30) not null collate nocase,
+	user_ID integer not null,
+	foreign key (user_ID) references Users(ID),
+	unique (user_ID, Name)
+);
+
 create table mutatiesoort (
 	ID INTEGER PRIMARY KEY AUTOINCREMENT,
 	Name varchar(30) not null unique
@@ -75,8 +89,14 @@ create table mutatiesoort_mapping (
 create table afschrift_cat_regels (
 	ID integer primary key autoincrement,
 	cat_ID integer not null,
+	subcat_ID integer,
 	user_ID integer not null,
 	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
+	-- SET NULL, not CASCADE: subcat_ID is only one optional field of a
+	-- rule, not what defines it (unlike cat_ID) — deleting a subcategory
+	-- should just clear it from any rule that assigned it, never delete
+	-- the rule (and its category assignment) along with it.
+	foreign key (subcat_ID) references afschrift_subcategorien(ID) on delete set null,
 	foreign key (user_ID) references Users(ID)
 );
 
@@ -173,10 +193,16 @@ create table temp_afschrift (
 	Saldo_na_mutatie dec(10,2) not null,
 	Tag Varchar(200),
 	Afschrift_cat_ID integer,
+	-- No ON DELETE CASCADE/SET NULL on purpose, same reasoning as
+	-- Afschrift_cat_ID: a subcategory already referenced by ledger data
+	-- must block deletion instead (app-level usage check), never silently
+	-- orphan/null out historical rows.
+	Afschrift_subcat_ID integer,
 	processed integer,
 	foreign key (Rekening_ID) references Rekening(ID),
 	foreign key (Mutatiesoort_ID) references mutatiesoort(ID),
-	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID)
+	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID),
+	foreign key (Afschrift_subcat_ID) references afschrift_subcategorien(ID)
 );
 
 -- Stage 3: permanent ledger. Only rows migrated from temp_afschrift once an
@@ -195,7 +221,11 @@ create table afschrift (
 	Saldo_na_mutatie dec(10,2) not null,
 	Tag Varchar(200),
 	Afschrift_cat_ID integer,
+	-- Same non-cascading FK as temp_afschrift.Afschrift_subcat_ID above —
+	-- app-level usage check blocks deleting a subcategory still in use.
+	Afschrift_subcat_ID integer,
 	foreign key (Rekening_ID) references Rekening(ID),
 	foreign key (Mutatiesoort_ID) references mutatiesoort(ID),
-	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID)
+	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID),
+	foreign key (Afschrift_subcat_ID) references afschrift_subcategorien(ID)
 );

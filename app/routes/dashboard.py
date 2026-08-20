@@ -65,10 +65,13 @@ _EXPORT_AFSCHRIFT_SQL = (SQL_DIR / "queries" / "afschrift" / "export_for_user.sq
 _DATE_BOUNDS_SQL = (SQL_DIR / "queries" / "afschrift" / "date_bounds_for_user.sql").read_text(encoding="utf-8")
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 
 _DEFAULT_GRAPH_LINES = {"inkomsten", "uitgaven", "verschil"}
-# The uncategorized bucket (Afschrift_cat_ID IS NULL) is its own
-# selectable pseudo-category everywhere on this page.
+# The uncategorized bucket (Afschrift_cat_ID/Afschrift_subcat_ID IS NULL)
+# is its own selectable pseudo-category/-subcategory everywhere on this
+# page — same sentinel reused for both, they're separate filter
+# dimensions so there's no clash.
 _NONE_CAT_KEY = "none"
 
 
@@ -95,20 +98,35 @@ def _resolve_month_range(today: date, start_month: Optional[str], end_month: Opt
     return range_start, range_end
 
 
-def _resolve_selected_ids(rekeningen, categorieen, rekening_ids, cat_ids, filtered: Optional[str]) -> tuple[set, set]:
+def _resolve_selected_ids(
+    rekeningen, categorieen, subcategorieen, rekening_ids, cat_ids, subcat_ids, filtered: Optional[str]
+) -> tuple[set, set, set]:
     """Shared by home() and export_csv(): turns the raw rekening_ids/
-    cat_ids query params into concrete selected-ID sets, defaulting to
-    "everything" only on a fresh, unfiltered request — see the "hidden
-    filtered=1 marker" note on home() below."""
+    cat_ids/subcat_ids query params into concrete selected-ID sets,
+    defaulting to "everything" only on a fresh, unfiltered request — see
+    the "hidden filtered=1 marker" note on home() below.
+
+    Each dimension's checkbox group only renders in index.html when its
+    list is non-empty ("{% if categorieen %}" etc.) — so a user with e.g.
+    zero subcategories (the common case right now, or zero categories for
+    a brand new user) has no way to submit anything for `subcat_ids` at
+    all, even deliberately. Trusting `is_filtered` there regardless would
+    read "the checkbox group doesn't exist" as "the user unchecked
+    everything" the moment ANY other filter (e.g. just the date) is
+    submitted, hiding every row. So a dimension only ever narrows based on
+    what was submitted once it actually has a UI to have produced that
+    from; otherwise it always means "everything", filtered or not."""
     all_rekening_ids = {str(r["ID"]) for r in rekeningen}
     all_cat_ids = {_NONE_CAT_KEY} | {str(c["ID"]) for c in categorieen}
+    all_subcat_ids = {_NONE_CAT_KEY} | {str(s["ID"]) for s in subcategorieen}
     is_filtered = filtered is not None
-    selected_rekening_ids = set(rekening_ids) if is_filtered else set(all_rekening_ids)
-    selected_cat_ids = set(cat_ids) if is_filtered else set(all_cat_ids)
-    return selected_rekening_ids, selected_cat_ids
+    selected_rekening_ids = set(rekening_ids) if (is_filtered and rekeningen) else set(all_rekening_ids)
+    selected_cat_ids = set(cat_ids) if (is_filtered and categorieen) else set(all_cat_ids)
+    selected_subcat_ids = set(subcat_ids) if (is_filtered and subcategorieen) else set(all_subcat_ids)
+    return selected_rekening_ids, selected_cat_ids, selected_subcat_ids
 
 
-def _export_url(range_start: date, range_end: date, selected_rekening_ids, selected_cat_ids) -> str:
+def _export_url(range_start: date, range_end: date, selected_rekening_ids, selected_cat_ids, selected_subcat_ids) -> str:
     """Builds the "Exporteren naar CSV" link's URL from the current
     request's already-resolved period/selection, so the export always
     matches exactly what's shown on the page it's linked from — never a
@@ -120,6 +138,7 @@ def _export_url(range_start: date, range_end: date, selected_rekening_ids, selec
     ]
     params += [("rekening_ids", v) for v in sorted(selected_rekening_ids)]
     params += [("cat_ids", v) for v in sorted(selected_cat_ids)]
+    params += [("subcat_ids", v) for v in sorted(selected_subcat_ids)]
     return "/export?" + urlencode(params)
 
 
@@ -153,6 +172,7 @@ def home(
     end_month: Optional[str] = None,
     rekening_ids: List[str] = Query(default_factory=list),
     cat_ids: List[str] = Query(default_factory=list),
+    subcat_ids: List[str] = Query(default_factory=list),
     graph_lines: List[str] = Query(default_factory=list),
     filtered: Optional[str] = None,
 ):
@@ -164,6 +184,7 @@ def home(
     try:
         rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user["id"]}).fetchall()
         categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
         bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user["id"]}).fetchone()
 
         today = date.today()
@@ -182,19 +203,20 @@ def home(
     # Distinguishes "form actually submitted" (even with everything
     # unchecked — that's a legitimate all-zero view) from "fresh page
     # load, no filter chosen yet" (defaults to everything selected).
-    selected_rekening_ids, selected_cat_ids = _resolve_selected_ids(
-        rekeningen, categorieen, rekening_ids, cat_ids, filtered
+    selected_rekening_ids, selected_cat_ids, selected_subcat_ids = _resolve_selected_ids(
+        rekeningen, categorieen, subcategorieen, rekening_ids, cat_ids, subcat_ids, filtered
     )
     selected_graph_lines = set(graph_lines) if filtered is not None else set(_DEFAULT_GRAPH_LINES)
 
-    filtered_rows = [
-        r for r in rows
-        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
-    ]
-    filtered_statements = [
-        r for r in statement_rows
-        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
-    ]
+    def _in_selection(r) -> bool:
+        return (
+            str(r["rekening_id"]) in selected_rekening_ids
+            and _cat_key(r["cat_id"]) in selected_cat_ids
+            and _cat_key(r["subcat_id"]) in selected_subcat_ids
+        )
+
+    filtered_rows = [r for r in rows if _in_selection(r)]
+    filtered_statements = [r for r in statement_rows if _in_selection(r)]
 
     totaal_inkomsten = sum(r["totaal_bij"] for r in filtered_rows)
     totaal_uitgaven = sum(r["totaal_af"] for r in filtered_rows)
@@ -259,6 +281,7 @@ def home(
         {
             "rekeningen": rekeningen,
             "categorieen": categorieen,
+            "subcategorieen": subcategorieen,
             "categorie_rows": categorie_rows,
             "totaal_inkomsten": totaal_inkomsten,
             "totaal_uitgaven": totaal_uitgaven,
@@ -267,19 +290,20 @@ def home(
             "end_month": f"{range_end.year:04d}-{range_end.month:02d}",
             "selected_rekening_ids": selected_rekening_ids,
             "selected_cat_ids": selected_cat_ids,
+            "selected_subcat_ids": selected_subcat_ids,
             "selected_graph_lines": selected_graph_lines,
             "graph_line_options": graph_line_options,
             "chart": chart,
             "months_json": json.dumps(months),
             "presets": _build_presets(today, (bounds["min_datum"], bounds["max_datum"]) if bounds else (None, None)),
-            "export_url": _export_url(range_start, range_end, selected_rekening_ids, selected_cat_ids),
+            "export_url": _export_url(range_start, range_end, selected_rekening_ids, selected_cat_ids, selected_subcat_ids),
         },
     )
 
 
 _EXPORT_HEADER = [
     "Datum", "Naam", "Rekening", "Tegenrekening", "Code", "Af_bij", "Bedrag_eur",
-    "Mutatiesoort", "Mededeling", "Saldo_na_mutatie", "Tag", "Categorie",
+    "Mutatiesoort", "Mededeling", "Saldo_na_mutatie", "Tag", "Categorie", "Subcategorie",
 ]
 
 
@@ -290,6 +314,7 @@ def export_csv(
     end_month: Optional[str] = None,
     rekening_ids: List[str] = Query(default_factory=list),
     cat_ids: List[str] = Query(default_factory=list),
+    subcat_ids: List[str] = Query(default_factory=list),
     filtered: Optional[str] = None,
 ):
     """Downloads exactly the current dashboard selection (Rekeningen,
@@ -315,10 +340,11 @@ def export_csv(
     try:
         rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user["id"]}).fetchall()
         categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
 
         range_start, range_end = _resolve_month_range(date.today(), start_month, end_month)
-        selected_rekening_ids, selected_cat_ids = _resolve_selected_ids(
-            rekeningen, categorieen, rekening_ids, cat_ids, filtered
+        selected_rekening_ids, selected_cat_ids, selected_subcat_ids = _resolve_selected_ids(
+            rekeningen, categorieen, subcategorieen, rekening_ids, cat_ids, subcat_ids, filtered
         )
 
         rows = conn.execute(
@@ -330,7 +356,9 @@ def export_csv(
 
     export_rows = [
         r for r in rows
-        if str(r["rekening_id"]) in selected_rekening_ids and _cat_key(r["cat_id"]) in selected_cat_ids
+        if str(r["rekening_id"]) in selected_rekening_ids
+        and _cat_key(r["cat_id"]) in selected_cat_ids
+        and _cat_key(r["subcat_id"]) in selected_subcat_ids
     ]
 
     buffer = io.StringIO()
@@ -340,7 +368,7 @@ def export_csv(
         writer.writerow([
             r["Datum"], r["Naam"], r["rekening_name"], r["Tegenrekening"], r["Code"], r["Af_bij"],
             format_amount_nl(r["Bedrag_eur"]), r["mutatiesoort_name"], r["Mededeling"],
-            format_amount_nl(r["Saldo_na_mutatie"]), r["Tag"], r["category"],
+            format_amount_nl(r["Saldo_na_mutatie"]), r["Tag"], r["category"], r["subcategorie"],
         ])
 
     start_key = f"{range_start.year:04d}-{range_start.month:02d}"

@@ -24,10 +24,13 @@ SELECT
     a.Bedrag_eur,
     a.Mededeling,
     a.Afschrift_cat_ID AS cat_id,
-    COALESCE(c.Name, 'Zonder categorie') AS category
+    COALESCE(c.Name, 'Zonder categorie') AS category,
+    a.Afschrift_subcat_ID AS subcat_id,
+    COALESCE(sc.Name, 'Zonder subcategorie') AS subcategorie
 FROM afschrift a
 JOIN Rekening r ON r.ID = a.Rekening_ID
 LEFT JOIN afschrift_categorien c ON c.ID = a.Afschrift_cat_ID
+LEFT JOIN afschrift_subcategorien sc ON sc.ID = a.Afschrift_subcat_ID
 WHERE r.user_ID = :user_id
   AND a.Datum BETWEEN :start AND :end
 ORDER BY a.Datum DESC, a.ID DESC;

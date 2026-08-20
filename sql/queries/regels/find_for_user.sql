@@ -1,10 +1,11 @@
 -- Ownership check before showing/saving the rule-edit page
 -- (/categories/regels/{regel_id}/edit) — confirms :id belongs to
--- :user_id, and resolves the owning category's name for display.
+-- :user_id, and resolves the owning category's name (and current
+-- subcategory, if any) for display/pre-fill.
 --
 -- Params: :id, :user_id
 
-SELECT r.ID, r.cat_ID, c.Name AS category_name
+SELECT r.ID, r.cat_ID, c.Name AS category_name, r.subcat_ID
 FROM afschrift_cat_regels r
 JOIN afschrift_categorien c ON c.ID = r.cat_ID
 WHERE r.ID = :id

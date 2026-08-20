@@ -11,6 +11,97 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.37] - 2026-08-20 — Geldbedragen op scherm nu in Nederlands formaat
+
+- **Nieuw**: elk geldbedrag dat op scherm getoond wordt (dashboard-
+  totalen Inkomsten/Uitgaven/Verschil, de "Per categorie"-tabel en haar
+  uitklap-statements, de grafiek-as en -tooltip, `/review`, en de
+  "laatste boeking" op de profielpagina) staat nu in Nederlands formaat
+  ('.' voor duizendtallen, ',' voor decimalen — bijv. "€ 56.124,64" in
+  plaats van "€ 56124.64"). Eerder gebeurde dit alleen al bij de
+  CSV-export (`app/formatting.py::format_amount_nl`); die functie is nu
+  ook als Jinja-filter `bedrag_nl` geregistreerd
+  (`app/templating.py`) en overal waar voorheen `"%.2f"|format(...)`
+  stond ingezet. Nieuwe `bedrag_nl_whole`-variant (geen decimalen, wel
+  duizendtal-punten) voor de grafiek's compacte as-labels.
+- **Geverifieerd** op een geïsoleerde scratch-kopie (aparte poort, niet
+  de live server): dashboard-totalen, de categorie-tabel, de grafiek-as
+  en de profielpagina tonen allemaal het Nederlandse formaat.
+
+## [0.0.36] - 2026-08-20 — Bugfix: dashboard-filter met alleen datum wijzigen toonde geen data
+
+- **Bugfix**: `_resolve_selected_ids` (`app/routes/dashboard.py`) las een
+  leeg/afwezig `subcat_ids` (of `cat_ids`/`rekening_ids`) bij een
+  ingediend filter altijd als "selecteer niets" — maar de bijbehorende
+  checkboxgroep wordt alleen getoond als die lijst niet leeg is (`{% if
+  subcategorieen %}` etc. in `index.html`). Vrijwel iedereen heeft nu nog
+  0 subcategorieën, dus die checkboxes bestaan simpelweg niet — het
+  formulier kon dat veld dus nooit bewust meesturen. Gevolg: alleen de
+  datum wijzigen en op "Filteren" klikken verstuurde `filtered=1` zonder
+  één `subcat_ids`, wat als "niets geselecteerd" werd gelezen en alle
+  rijen wegfilterde, óók rijen zonder subcategorie. Een dimensie telt nu
+  pas als bewust gefilterd wanneer er voor die dimensie ook echt een
+  checkboxgroep bestond (lijst niet leeg); anders blijft hij op "alles"
+  staan, ongeacht of er elders gefilterd is.
+- **Geverifieerd** op een geïsoleerde scratch-kopie (aparte poort, niet
+  de live server): totalen vóór en na het indienen van alleen een
+  datumfilter zijn nu identiek, bevestigd met 0 subcategorieën aanwezig
+  (het scenario dat de bug veroorzaakte).
+
+## [0.0.35] - 2026-08-20 — Subcategorieën
+
+- **Nieuw**: naast categorieën kun je nu ook subcategorieën gebruiken om
+  binnen een categorie nog verder te filteren — bijv. categorie
+  "Boodschappen" met subcategorieën "Weekboodschappen"/"Slijterij". Eén
+  gedeelde lijst per gebruiker (`afschrift_subcategorien`,
+  `sql/schema.sql`), niet gebonden aan één categorie — dezelfde
+  subcategorie is dus onder elke categorie te kiezen. Altijd optioneel:
+  "geen subcategorie" is overal een normale, geldige staat.
+- Bij het aanmaken/bewerken van een **regel**
+  (`/categories/{cat_id}/regels`, `/categories/regels/{id}/edit`) kies je
+  nu optioneel ook een subcategorie, met een "+ nieuwe subcategorie…"
+  inline-optie — zelfde patroon als de bestaande "+ nieuwe categorie…" op
+  `/review`. Nieuwe sectie "Subcategorieën" op de profielpagina om de
+  gedeelde lijst te beheren (toevoegen/verwijderen), naast de bestaande
+  categorieën-sectie.
+- Op **`/review`** staat nu ook een subcategorie-dropdown per rij, naast
+  de bestaande categorie-dropdown — zelfde kies-of-maak-nieuwe patroon,
+  en een nieuwe "Subcategorie"-kolom in de tabel.
+- **Categorisatie** (`sql/categorization/categorize_batch.sql`,
+  `recategorize_temp_afschrift.sql`): matcht een rij twee of meer regels
+  van dezelfde (gewonnen) categorie met een verschillende subcategorie,
+  dan blijft de subcategorie leeg in plaats van de rij als ambigu te
+  markeren — subcategorie is altijd best-effort, nooit blokkerend; de
+  categorie-toekenning/`processed`-status is hier volledig ongewijzigd
+  door. Migratie naar `afschrift`
+  (`sql/migration/insert_into_afschrift.sql`) neemt de subcategorie
+  gewoon 1-op-1 mee.
+- **Dashboard** (`/`): nieuwe checkbox-groep "Subcategorieën meetellen",
+  zelfde aan/uit-patroon als categorieën — telt mee in de bestaande
+  categorie-totalen (geen aparte subtotalen-rij of grafieklijn, dat was
+  bewust niet de vraag). De uitklap-tabel per categorie en de CSV-export
+  tonen er allebei een "Subcategorie"-kolom bij.
+- Verwijderen: een subcategorie die nog in `temp_afschrift`/`afschrift`
+  gebruikt wordt kan niet verwijderd worden (zelfde in-use-guard als
+  categorieën, nieuwe `sql/queries/subcategorieen/count_usage_for_user.sql`)
+  — een regel die de subcategorie alleen toewijst verliest bij verwijderen
+  gewoon dat ene veld (`ON DELETE SET NULL`), de regel zelf en zijn
+  categorie-toekenning blijven bestaan.
+- Bestaande database bijgewerkt via nieuw eenmalig
+  `scripts/migrate_add_subcategorien.py` (timestamped backup,
+  `--dry-run`, idempotency-guard) — puur additief, geen bestaande rij
+  verandert van vorm.
+- **Geverifieerd** op een geïsoleerde scratch-kopie van de echte
+  database: subcategorie aanmaken, regel met subcategorie toevoegen,
+  synthetische rijen laten categoriseren (incl. het conflict-scenario:
+  twee regels, zelfde categorie, verschillende subcategorie →
+  subcategorie blijft leeg, categorie wordt gewoon 1x toegekend),
+  handmatig corrigeren en opnieuw categoriseren op `/review` (bevestigd
+  dat een al-opgeloste rij zijn handmatige subcategorie behoudt),
+  migreren naar `afschrift`, filteren en CSV-exporteren op het dashboard,
+  en verwijderen (geblokkeerd bij gebruik, `SET NULL` op een regel die
+  hem alleen toewijst).
+
 ## [0.0.34] - 2026-08-19 — Profielpagina: laatste boeking per rekening
 
 - Elke rekening op de profielpagina (`/user/{username}`) toont nu ook
