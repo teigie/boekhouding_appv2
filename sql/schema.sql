@@ -51,18 +51,27 @@ create table afschrift_categorie_suggesties (
 	Name varchar(30) not null unique
 );
 
--- Subcategories: unlike afschrift_categorien, this is deliberately ONE
--- shared per-user list, not scoped to a single category — the same
--- subcategory can be picked under any of a user's categories (confirmed
--- with the user rather than assumed; see CHANGELOG). Always optional
--- everywhere it's used (on a regel, on a temp_afschrift/afschrift row) —
--- "no subcategory" is a normal, expected state, never an error.
+-- Subcategories: scoped to exactly one parent category — a subcategory
+-- only exists, and is only ever selectable, under its own cat_ID (this
+-- used to be one shared per-user list instead; changed on request, see
+-- CHANGELOG). Uniqueness is therefore per-category, not per-user: the
+-- same name (e.g. "Overig") can exist once under each of several
+-- categories. cat_ID cascades on delete, same as afschrift_cat_regels
+-- above — a subcategory has no meaning once its owning category is
+-- gone. user_ID is kept alongside cat_ID (redundant with the category's
+-- own user_ID) purely for a cheap ownership check without a join, same
+-- pattern as afschrift_cat_regel_kolommen.regel_ID/user_ID below. Always
+-- optional everywhere it's used (on a regel, on a temp_afschrift/
+-- afschrift row) — "no subcategory" is a normal, expected state, never
+-- an error.
 create table afschrift_subcategorien (
 	ID integer primary key autoincrement,
 	Name varchar(30) not null collate nocase,
+	cat_ID integer not null,
 	user_ID integer not null,
+	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,
 	foreign key (user_ID) references Users(ID),
-	unique (user_ID, Name)
+	unique (cat_ID, Name)
 );
 
 create table mutatiesoort (

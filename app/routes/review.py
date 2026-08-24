@@ -213,7 +213,11 @@ async def save_categories(request: Request, rekening_id: int):
             if resolved_cat_id is None:
                 continue
             resolved_subcat_id = resolve_or_create_subcategory(
-                conn, user["id"], form.get(f"subcat_id_{row_id}", ""), form.get(f"new_subcategory_name_{row_id}", "")
+                conn,
+                user["id"],
+                resolved_cat_id,
+                form.get(f"subcat_id_{row_id}", ""),
+                form.get(f"new_subcategory_name_{row_id}", ""),
             )
             cursor = conn.execute(
                 _SET_CATEGORY_SQL,

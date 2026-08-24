@@ -58,7 +58,7 @@
         </div>
         <div class="table-actions checkbox-row" style="flex-wrap: wrap;">
           {% for sc in subcategorieen %}
-            <label><input type="checkbox" name="subcat_ids" value="{{ sc['ID'] }}" {{ "checked" if sc['ID']|string in selected_subcat_ids }}> {{ sc["Name"] }}</label>
+            <label><input type="checkbox" name="subcat_ids" value="{{ sc['ID'] }}" {{ "checked" if sc['ID']|string in selected_subcat_ids }}> {{ sc["cat_name"] }}: {{ sc["Name"] }}</label>
           {% endfor %}
           <label><input type="checkbox" name="subcat_ids" value="none" {{ "checked" if "none" in selected_subcat_ids }}> Zonder subcategorie</label>
         </div>

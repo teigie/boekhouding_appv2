@@ -20,7 +20,9 @@ _LATEST_ENTRY_SQL = (
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
-_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_SUBCATEGORIES_FOR_CATEGORY_SQL = (
+    SQL_DIR / "queries" / "subcategorieen" / "list_for_category.sql"
+).read_text(encoding="utf-8")
 
 
 def user_page_url(username: str) -> str:
@@ -89,10 +91,17 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
     regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
     regels_by_cat = _group_regels_by_category(regel_rows)
-    subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user_id}).fetchall()
 
     categorieen_out = [
-        {"ID": c["ID"], "Name": c["Name"], "regels": regels_by_cat.get(c["ID"], [])} for c in categorieen
+        {
+            "ID": c["ID"],
+            "Name": c["Name"],
+            "regels": regels_by_cat.get(c["ID"], []),
+            "subcategorieen": conn.execute(
+                _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": c["ID"], "user_id": user_id}
+            ).fetchall(),
+        }
+        for c in categorieen
     ]
 
     owned_names = {c["Name"].casefold() for c in categorieen}
@@ -103,5 +112,4 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
         "categorieen": categorieen_out,
         "suggesties": suggesties,
         "regel_kolommen": REGEL_KOLOMMEN,
-        "subcategorieen": subcategorieen,
     }

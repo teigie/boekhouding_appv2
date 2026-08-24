@@ -11,6 +11,55 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.39] - 2026-08-24 — Subcategorieën horen nu bij één categorie
+
+- **Wijziging**: subcategorieën waren tot nu toe één gedeelde lijst per
+  gebruiker, kiesbaar onder elke categorie. Nu horen ze bij precies één
+  categorie — dezelfde naam (bijv. "Overig") mag daardoor wel weer onder
+  meerdere categorieën bestaan, één keer per categorie
+  (`unique (cat_ID, Name)` i.p.v. `unique (user_ID, Name)` in
+  `sql/schema.sql`). De losse "Subcategorieën"-sectie op de profielpagina
+  is vervangen door een eigen subcategorie-blokje per categoriekaart
+  (`app/templates/user.html`); aanmaken gaat nu via
+  `POST /categories/{cat_id}/subcategories` i.p.v. het vlakke
+  `POST /subcategories`.
+- De subcategorie-dropdown van een regel toont nu alleen nog de subcategorieën
+  van de categorie waar die regel al onder valt (`app/routes/categories.py`,
+  `regel_edit.html`) — niet meer alle subcategorieën van de gebruiker.
+- Op `/review` kiest elke rij nog steeds category én subcategorie apart
+  in dezelfde rij; een nieuw `app/static/js/review.js` filtert de
+  subcategorie-dropdown client-side op de categorie die in diezelfde rij
+  gekozen is (via `data-cat-id` op elke optie), en zet de subcategorie
+  terug op "— geen —" zodra de gekozen categorie verandert.
+- Op het dashboard-filter (`app/templates/index.html`) staat elke
+  subcategorie-checkbox nu met zijn categorienaam ervoor (bijv.
+  "Auto: Overig"), zodat gelijknamige subcategorieën van verschillende
+  categorieën uit elkaar te houden zijn.
+- **Beveiliging**: een subcategorie-ID die niet bij de bedoelde categorie
+  hoort (geraden, verlopen, of van een andere categorie van dezelfde
+  gebruiker) wordt overal stilzwijgend genegeerd (resultaat: geen
+  subcategorie) in plaats van foutief gekoppeld — zowel bij een regel
+  (`sql/queries/reference_data/set_regel_subcategory.sql`,
+  `app/subcategories.py::resolve_or_create_subcategory`) als bij een
+  `/review`-rij (`sql/queries/temp_afschrift/set_category.sql`). Dit gold
+  voor `resolve_or_create_subcategory`'s numerieke-ID-pad voorheen niet
+  eens op user-niveau — nu wel, als bijvangst van deze wijziging.
+- **Migratie**: bestaande subcategorieën zijn gedropt (met de gebruiker
+  bevestigd) — er was geen betrouwbare manier om automatisch te raden bij
+  welke categorie een bestaande (tot nu toe categorieloze) subcategorie
+  zou moeten horen. `scripts/migrate_scope_subcategorien_to_category.py`
+  (eenmalig, met automatische backup) zet alle `subcat_ID`/
+  `Afschrift_subcat_ID`-verwijzingen naar `NULL` en herbouwt de tabel met
+  de nieuwe kolom/constraint (SQLite kan geen NOT NULL-kolom of nieuwe
+  UNIQUE-constraint op een bestaande tabel ALTERen).
+- **Geverifieerd** op de live app (aparte poort): subcategorie "Overig"
+  aangemaakt onder twee verschillende categorieën (blijft apart, dubbele
+  naam binnen dezelfde categorie geweigerd), profielpagina/regel-editor
+  tonen per categorie alleen haar eigen subcategorieën, een
+  cross-categorie subcat_id wordt zowel bij een regel als op `/review`
+  genegeerd i.p.v. verkeerd gekoppeld, in-gebruik-check blokkeert
+  verwijderen zoals voorheen. Testdata na de check weer opgeruimd.
+
 ## [0.0.38] - 2026-08-24 — OF verwijderd: keywords binnen een regel-kolom zijn nu altijd EN
 
 - **Wijziging**: de EN/OF-keuze (`combine_mode`) voor hoe de keywords

@@ -138,9 +138,9 @@
                           class="subcategory-select"
                           onchange="this.closest('td').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
                         >
-                          <option value="" {{ "selected" if not row["Subcategorie"] }}>— geen —</option>
+                          <option value="" {{ "selected" if not row["Subcategorie_ID"] }}>— geen —</option>
                           {% for sc in subcategories %}
-                            <option value="{{ sc['ID'] }}" {{ "selected" if sc["Name"] == row["Subcategorie"] }}>{{ sc["Name"] }}</option>
+                            <option value="{{ sc['ID'] }}" data-cat-id="{{ sc['cat_ID'] }}" {{ "selected" if sc["ID"] == row["Subcategorie_ID"] }}>{{ sc["Name"] }}</option>
                           {% endfor %}
                           <option value="__new__">+ nieuwe subcategorie…</option>
                         </select>
@@ -177,4 +177,7 @@
       </section>
     {% endfor %}
   {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script src="/static/js/review.js" defer></script>
 {% endblock %}

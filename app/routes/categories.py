@@ -58,7 +58,9 @@ _SET_REGEL_SUBCATEGORY_SQL = (
     SQL_DIR / "queries" / "reference_data" / "set_regel_subcategory.sql"
 ).read_text(encoding="utf-8")
 
-_LIST_SUBCATEGORIES_SQL = (SQL_DIR / "queries" / "subcategorieen" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_SUBCATEGORIES_FOR_CATEGORY_SQL = (
+    SQL_DIR / "queries" / "subcategorieen" / "list_for_category.sql"
+).read_text(encoding="utf-8")
 _FIND_SUBCATEGORY_BY_NAME_SQL = (
     SQL_DIR / "queries" / "subcategorieen" / "find_by_name.sql"
 ).read_text(encoding="utf-8")
@@ -166,11 +168,13 @@ def delete_category(request: Request, cat_id: int):
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
-@router.post("/subcategories")
-def add_subcategory(request: Request, name: str = Form(...)):
-    """Adds a subcategory to the user's one shared list (not scoped to a
-    category, see sql/schema.sql) — same reuse-by-name-or-reject pattern
-    as add_category above."""
+@router.post("/categories/{cat_id}/subcategories")
+def add_subcategory(request: Request, cat_id: int, name: str = Form(...)):
+    """Adds a subcategory under one specific category — subcategories are
+    scoped to exactly one category (see sql/schema.sql), so :cat_id comes
+    from the URL just like add_regel's does. Same reuse-by-name-or-reject
+    pattern as add_category above, just narrowed to this one category:
+    the same name is fine again under a different one."""
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -178,22 +182,26 @@ def add_subcategory(request: Request, name: str = Form(...)):
     name = name.strip()
     conn = get_connection()
     try:
+        category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
+        if category is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
         error = None
         if not name:
             error = "Een subcategorienaam is verplicht."
         else:
             existing = conn.execute(
-                _FIND_SUBCATEGORY_BY_NAME_SQL, {"user_id": user["id"], "name": name}
+                _FIND_SUBCATEGORY_BY_NAME_SQL, {"cat_id": cat_id, "user_id": user["id"], "name": name}
             ).fetchone()
             if existing:
-                error = f"Subcategorie '{name}' bestaat al."
+                error = f"Subcategorie '{name}' bestaat al bij deze categorie."
             else:
                 try:
-                    conn.execute(_ADD_SUBCATEGORY_SQL, {"name": name, "user_id": user["id"]})
+                    conn.execute(_ADD_SUBCATEGORY_SQL, {"name": name, "cat_id": cat_id, "user_id": user["id"]})
                     conn.commit()
                 except sqlite3.IntegrityError:
                     conn.rollback()
-                    error = f"Subcategorie '{name}' bestaat al."
+                    error = f"Subcategorie '{name}' bestaat al bij deze categorie."
 
         if error:
             data = load_user_page_data(conn, user["id"])
@@ -201,11 +209,11 @@ def add_subcategory(request: Request, name: str = Form(...)):
         conn.close()
 
     if error:
-        log.warning("Failed to add subcategory for user %s: %s", user["id"], error)
+        log.warning("Failed to add subcategory to category %s, user %s: %s", cat_id, user["id"], error)
         return templates.TemplateResponse(
             request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
-    audit.info("Subcategory '%s' added by user %s", name, user["id"])
+    audit.info("Subcategory '%s' added to category %s by user %s", name, cat_id, user["id"])
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
@@ -279,7 +287,7 @@ async def add_regel(request: Request, cat_id: int):
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
         subcat_id = resolve_or_create_subcategory(
-            conn, user["id"], form.get("subcat_id", ""), form.get("new_subcategory_name", "")
+            conn, user["id"], cat_id, form.get("subcat_id", ""), form.get("new_subcategory_name", "")
         )
 
         columns = []  # [(kolom, [keyword, ...]), ...]
@@ -367,7 +375,9 @@ def edit_regel_page(request: Request, regel_id: int):
         if regel is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
         rows = conn.execute(_LIST_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]}).fetchall()
-        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategorieen = conn.execute(
+            _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": regel["cat_ID"], "user_id": user["id"]}
+        ).fetchall()
     finally:
         conn.close()
 
@@ -402,10 +412,14 @@ async def save_regel(request: Request, regel_id: int):
         if regel is None:
             return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
-        subcategorieen = conn.execute(_LIST_SUBCATEGORIES_SQL, {"user_id": user["id"]}).fetchall()
+        subcategorieen = conn.execute(
+            _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": regel["cat_ID"], "user_id": user["id"]}
+        ).fetchall()
         submitted_subcat_id = form.get("subcat_id", "")
         submitted_new_subcategory_name = form.get("new_subcategory_name", "")
-        subcat_id = resolve_or_create_subcategory(conn, user["id"], submitted_subcat_id, submitted_new_subcategory_name)
+        subcat_id = resolve_or_create_subcategory(
+            conn, user["id"], regel["cat_ID"], submitted_subcat_id, submitted_new_subcategory_name
+        )
 
         columns = []  # [(kolom, [keyword, ...]), ...]
         submitted = {}  # kolom -> {"keywords_text"} as typed, for re-render on error

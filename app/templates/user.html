@@ -102,34 +102,6 @@
     {% endif %}
   </section>
 
-  <section class="card" style="margin-top: 1.5rem;">
-    <h2>Subcategorieën</h2>
-    <p class="muted">
-      Eén gedeelde lijst, niet gebonden aan één categorie — dezelfde
-      subcategorie kies je onder elke categorie, bij een regel of op
-      <a href="/review">Controle</a>. Altijd optioneel: een categorie of
-      rij zonder subcategorie is een normale, geldige staat.
-    </p>
-    {% if subcategorieen %}
-      <div class="table-actions" style="flex-wrap: wrap;">
-        {% for sc in subcategorieen %}
-          <span class="chip">
-            {{ sc["Name"] }}
-            <form method="post" action="/subcategories/{{ sc['ID'] }}/delete" class="inline-form">
-              <button type="submit" class="link-button">×</button>
-            </form>
-          </span>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="muted">Nog geen subcategorieën.</p>
-    {% endif %}
-    <form method="post" action="/subcategories" style="margin-top: 1rem;">
-      <label>Naam<br><input type="text" name="name" required placeholder="bijv. Weekboodschappen"></label>
-      <button type="submit">Subcategorie toevoegen</button>
-    </form>
-  </section>
-
   {% if not categorieen %}
     <section class="card" style="margin-top: 1.5rem;">
       <p class="muted">Nog geen categorieën — voeg er hierboven een toe, of kies een suggestie.</p>
@@ -172,6 +144,34 @@
           <p class="muted" style="margin-top: 0.75rem;">Nog geen regels voor deze categorie.</p>
         {% endif %}
 
+        <div class="card" style="margin-top: 0.75rem; background: var(--bg);">
+          <strong>Subcategorieën</strong>
+          <p class="muted" style="margin-top: 0.35rem;">
+            Alleen binnen "{{ c["Name"] }}" te kiezen — bij een regel van
+            deze categorie of op <a href="/review">Controle</a>. Altijd
+            optioneel: een regel of rij zonder subcategorie is een
+            normale, geldige staat.
+          </p>
+          {% if c.subcategorieen %}
+            <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.5rem;">
+              {% for sc in c.subcategorieen %}
+                <span class="chip">
+                  {{ sc["Name"] }}
+                  <form method="post" action="/subcategories/{{ sc['ID'] }}/delete" class="inline-form">
+                    <button type="submit" class="link-button">×</button>
+                  </form>
+                </span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted" style="margin-top: 0.5rem;">Nog geen subcategorieën voor deze categorie.</p>
+          {% endif %}
+          <form method="post" action="/categories/{{ c['ID'] }}/subcategories" style="margin-top: 0.75rem;">
+            <label>Naam<br><input type="text" name="name" required placeholder="bijv. Weekboodschappen"></label>
+            <button type="submit">Subcategorie toevoegen</button>
+          </form>
+        </div>
+
         <details style="margin-top: 1rem;">
           <summary>Nieuwe regel toevoegen</summary>
           <form method="post" action="/categories/{{ c['ID'] }}/regels" style="margin-top: 0.75rem;">
@@ -193,7 +193,7 @@
                 onchange="this.closest('form').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
               >
                 <option value="" selected>— geen subcategorie —</option>
-                {% for sc in subcategorieen %}
+                {% for sc in c.subcategorieen %}
                   <option value="{{ sc['ID'] }}">{{ sc["Name"] }}</option>
                 {% endfor %}
                 <option value="__new__">+ nieuwe subcategorie…</option>
