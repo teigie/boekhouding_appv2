@@ -87,24 +87,59 @@
           {% if cats_of_type %}
             <div style="flex: 1; min-width: 240px;">
               <h3 style="margin-top: 0; color: var({{ color_var }});">{{ super_type }}</h3>
-              <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+              <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem;">
                 {% for c in cats_of_type %}
                   <div>
-                    <div class="table-actions" style="gap: 0.5rem;">
-                      <a href="#categorie-{{ c['ID'] }}" class="chip">{{ c["Name"] }}</a>
-                      {% if c.subcategorieen %}
+                    <div class="toc-row">
+                      <div class="table-actions" style="gap: 0.35rem;">
+                        {% if c.subcategorieen %}
+                          <button
+                            type="button"
+                            class="toc-toggle"
+                            data-target="toc-subcats-{{ c['ID'] }}"
+                            aria-expanded="false"
+                            aria-label="Subcategorieën tonen/verbergen"
+                          ><span class="toc-toggle-arrow">›</span></button>
+                        {% else %}
+                          <span class="toc-toggle-spacer"></span>
+                        {% endif %}
+                        <a href="#categorie-{{ c['ID'] }}" class="chip">{{ c["Name"] }}</a>
+                      </div>
+                      {% if c.description %}
                         <button
                           type="button"
-                          class="chip toc-expand-btn"
-                          data-target="toc-subcats-{{ c['ID'] }}"
+                          class="toc-toggle"
+                          data-target="toc-desc-{{ c['ID'] }}"
+                          data-expanded-display="block"
                           aria-expanded="false"
-                        ><span class="toc-expand-arrow">▸</span> subcategorieën</button>
+                          aria-label="Omschrijving tonen/verbergen"
+                        ><span class="toc-toggle-arrow">›</span></button>
                       {% endif %}
                     </div>
+                    {% if c.description %}
+                      <div id="toc-desc-{{ c['ID'] }}" class="toc-description muted" style="display: none; margin: 0.25rem 0 0 1.95rem;">{{ c.description }}</div>
+                    {% endif %}
                     {% if c.subcategorieen %}
-                      <div id="toc-subcats-{{ c['ID'] }}" class="table-actions toc-subcats" style="flex-wrap: wrap; margin: 0.5rem 0 0 1.25rem; display: none;">
+                      <div id="toc-subcats-{{ c['ID'] }}" class="toc-subcats" style="margin: 0.4rem 0 0 5.5rem; display: none;">
                         {% for sc in c.subcategorieen %}
-                          <a href="#subcat-{{ sc['ID'] }}" class="chip">{{ sc["Name"] }}</a>
+                          <div class="toc-row">
+                            <div class="table-actions" style="gap: 0.35rem;">
+                              <a href="#subcat-{{ sc['ID'] }}" class="chip">{{ sc["Name"] }}</a>
+                            </div>
+                            {% if sc.description %}
+                              <button
+                                type="button"
+                                class="toc-toggle"
+                                data-target="toc-subcat-desc-{{ sc['ID'] }}"
+                                data-expanded-display="block"
+                                aria-expanded="false"
+                                aria-label="Omschrijving tonen/verbergen"
+                              ><span class="toc-toggle-arrow">›</span></button>
+                            {% endif %}
+                          </div>
+                          {% if sc.description %}
+                            <div id="toc-subcat-desc-{{ sc['ID'] }}" class="toc-description muted" style="display: none; margin: 0.25rem 0 0 0;">{{ sc.description }}</div>
+                          {% endif %}
                         {% endfor %}
                       </div>
                     {% endif %}
@@ -151,6 +186,13 @@
             <button type="submit" class="link-button">Categorie verwijderen</button>
           </form>
         </div>
+
+        <form method="post" action="/categories/{{ c['ID'] }}/description" class="table-actions" style="align-items: flex-start; gap: 0.5rem; margin-top: 0.5rem;">
+          <label style="flex: 1; margin-bottom: 0;">Omschrijving<br>
+            <textarea name="description" rows="2" placeholder="Waar gaat deze categorie over?">{{ c.description or "" }}</textarea>
+          </label>
+          <button type="submit" style="margin-top: 1.6rem;">Opslaan</button>
+        </form>
 
         {% if c.regels %}
           {% for regel in c.regels %}
@@ -216,6 +258,13 @@
                 <button type="submit" class="link-button">Subcategorie verwijderen</button>
               </form>
             </div>
+
+            <form method="post" action="/subcategories/{{ sc['ID'] }}/description" class="table-actions" style="align-items: flex-start; gap: 0.5rem; margin-top: 0.5rem;">
+              <label style="flex: 1; margin-bottom: 0;">Omschrijving<br>
+                <textarea name="description" rows="2" placeholder="Waar gaat deze subcategorie over?">{{ sc.description or "" }}</textarea>
+              </label>
+              <button type="submit" style="margin-top: 1.6rem;">Opslaan</button>
+            </form>
 
             {% if sc.regels %}
               {% for regel in sc.regels %}

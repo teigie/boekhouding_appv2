@@ -11,6 +11,61 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.48] - 2026-08-24 — Inhoudsopgave: subcategorieën nóg dieper ingesprongen
+
+- **Wijziging** (vervolg op 0.0.47): `2.75rem` insprong was nog steeds
+  weinig te onderscheiden van de categorie zelf. Verdubbeld naar
+  `5.5rem`.
+- **Geverifieerd** op de live app (aparte poort): rendert correct, geen
+  tracebacks.
+
+## [0.0.47] - 2026-08-24 — Inhoudsopgave: dieper ingesprongen subcategorieën, groter uitklap-knopje
+
+- **Wijziging** (vervolg op 0.0.46): het uitklap-pijltje (`.toc-toggle`)
+  was zo klein en tekstloos dat het nauwelijks als knop te herkennen was.
+  Nu een duidelijke ronde knop (1.6rem, `border` + `background: var(--bg)`
+  in plaats van kale tekst) — nog steeds een pijltje, maar zichtbaar
+  klikbaar, met dezelfde hover-kleur als andere knoppen in de app.
+- De subcategorie-chips in de Inhoudsopgave sprongen amper in ten
+  opzichte van hun categorie (`margin-left` gelijk aan de oude, kleine
+  knopbreedte). Nu duidelijk dieper ingesprongen (`2.75rem`); de
+  omschrijvingstekst van een categorie zelf schuift mee naar `1.95rem`
+  zodat hij nog steeds recht onder de naam-chip begint (na het bredere
+  knopje).
+- **Geverifieerd** op de live app (aparte poort): HTML/CSS renderen
+  correct, bestaande (echte) omschrijvingen van categorie "Inkomsten" en
+  subcategorie "Salaris" bleven ongemoeid — niets aangepast of gewist dit
+  keer, alleen gelezen ter controle. Dashboard onaangetast.
+
+## [0.0.46] - 2026-08-24 — Inhoudsopgave: klein pijltje + omschrijving, omschrijving bewerkbaar bij de regels
+
+- **Wijziging** (vervolg op 0.0.45): het uitklap-knopje (`▸ subcategorieën`)
+  was zelf een chip-brede knop met tekst — veel groter dan nodig. Nu is
+  het één klein pijltje (`›`, `.toc-toggle`), zonder tekst/chip-styling,
+  links vóór de naam-chip. Categorieën zonder subcategorieën krijgen een
+  even brede lege plek (`.toc-toggle-spacer`) zodat alle naam-chips
+  binnen een kolom uitlijnen.
+- Rechts van de naam-chip staat nu, alléén als er een omschrijving is,
+  hetzelfde kleine pijltje — klikken toont/verbergt de omschrijvingstekst
+  eronder (`.toc-description`). Subcategorie-chips in de Inhoudsopgave
+  krijgen dezelfde behandeling: elk op zijn eigen regel, met een eigen
+  pijltje voor zijn omschrijving als die er is.
+- `app/static/js/user.js`'s toggle-handler is veralgemeniseerd van
+  `.toc-expand-btn` naar `.toc-toggle`: één handler voor zowel het
+  subcategorieën-pijltje als het omschrijving-pijltje, met
+  `data-expanded-display` om "flex" (subcategorieën-rij) versus "block"
+  (omschrijvingstekst) te kiezen.
+- **Nieuw**: bij elke categorie en subcategorie in de regels-sectie staat
+  nu een klein formulier ("Omschrijving") met een textarea + "Opslaan",
+  gekoppeld aan de al bestaande routes `POST /categories/{id}/description`
+  en `POST /subcategories/{id}/description` (zie 0.0.40) — de eerste UI
+  voor een veld dat tot nu toe alleen via die routes zelf te zetten was.
+- **Geverifieerd** op de live app (aparte poort): omschrijving zetten via
+  het formulier in de regels-sectie verschijnt zowel daar (pre-filled bij
+  herladen) als in de Inhoudsopgave achter het pijltje, voor zowel een
+  categorie als een subcategorie; lege waarde wist hem weer. Geen
+  tracebacks, JS/CSS correct uitgeleverd, dashboard onaangetast.
+
 ## [0.0.45] - 2026-08-24 — Inhoudsopgave: apart uitklap-knopje per categorie
 
 - **Wijziging** (vervolg op 0.0.44): een categorie met subcategorieën in

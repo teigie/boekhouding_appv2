@@ -410,16 +410,65 @@ summary {
   color: var(--accent);
 }
 
-.toc-expand-btn {
-  cursor: pointer;
+.toc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
-.toc-expand-arrow {
+.toc-subcats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.toc-description {
+  font-size: 0.85rem;
+}
+
+/* Icon-only chevron button, not a chip — used both to expand a
+   category's subcategories (left of its name) and to reveal a
+   (sub)category's description (right of its name). Same JS hook
+   (app/static/js/user.js's .toc-toggle handler) drives both; only the
+   target element and its shown display value differ. A round outlined
+   button (rather than bare text) so it reads clearly as clickable at a
+   glance. */
+.toc-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+
+.toc-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.toc-toggle-spacer {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: none;
+}
+
+.toc-toggle-arrow {
   display: inline-block;
   transition: transform 0.15s ease;
 }
 
-.toc-expand-btn[aria-expanded="true"] .toc-expand-arrow {
+.toc-toggle[aria-expanded="true"] .toc-toggle-arrow {
   transform: rotate(90deg);
 }
 
@@ -447,7 +496,7 @@ summary {
 
 .preset-btn,
 .checkbox-toggle-btn,
-.toc-expand-btn {
+.toc-toggle {
   font: inherit;
 }
 
