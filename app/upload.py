@@ -9,11 +9,11 @@ Two kinds of gate, both all-or-nothing per account:
   reference data). Nothing is inserted if either fails — these aren't
   temp_afschrift2 problems, they're "this batch doesn't belong here /
   isn't recognized yet" problems.
-- Post-insert continuity checks (balance-chain + dedup, sql/upload/) — run
-  after inserting the batch, inside the same transaction; roll back the
-  insert if either fails. These inherently need the new rows already
-  present, since they check the batch against the account's existing
-  history.
+- Post-insert continuity checks (date-order + balance-chain + batch-
+  totals + dedup, sql/upload/) — run after inserting the batch, inside
+  the same transaction; roll back the insert if any fails. These
+  inherently need the new rows already present, since they check the
+  batch against the account's existing history.
 
 Once a batch clears both and commits, that account's full temp_afschrift2
 backlog is immediately categorized (app/categorization.py) so it lands
@@ -37,6 +37,7 @@ from typing import Optional
 from app.categorization import CategorizationResult, categorize_pending
 from app.config import SQL_DIR
 from app.db import get_connection
+from app.formatting import format_amount_nl
 from app.importers.registry import get_importer
 from app.logging_config import get_app_logger, get_audit_logger
 
@@ -46,7 +47,9 @@ audit = get_audit_logger()
 _FIND_REKENING_SQL = (SQL_DIR / "queries" / "rekeningen" / "find_by_name.sql").read_text(encoding="utf-8")
 _FIND_MUTATIESOORT_SQL = (SQL_DIR / "queries" / "mutatiesoorten" / "find_by_name.sql").read_text(encoding="utf-8")
 _INSERT_BATCH_SQL = (SQL_DIR / "upload" / "insert_batch.sql").read_text(encoding="utf-8")
+_CHECK_DATE_ORDER_SQL = (SQL_DIR / "upload" / "check_date_order.sql").read_text(encoding="utf-8")
 _CHECK_BALANCE_CHAIN_SQL = (SQL_DIR / "upload" / "check_balance_chain.sql").read_text(encoding="utf-8")
+_CHECK_BATCH_TOTALS_SQL = (SQL_DIR / "upload" / "check_batch_totals.sql").read_text(encoding="utf-8")
 _CHECK_DEDUP_SQL = (SQL_DIR / "upload" / "check_dedup.sql").read_text(encoding="utf-8")
 
 
@@ -125,6 +128,22 @@ def _process_account_batch(
     try:
         conn.executemany(_INSERT_BATCH_SQL, account_rows)
 
+        date_breaks = conn.execute(_CHECK_DATE_ORDER_SQL, params).fetchall()
+        if date_breaks:
+            conn.rollback()
+            first = date_breaks[0]
+            reason = (
+                f"Datums lopen niet consistent op: {first['Naam']} staat op {first['Datum']}, "
+                f"vóór {first['prev_datum']} van de vorige rij. Dit bestand staat mogelijk niet in de "
+                "juiste volgorde, of er ontbreekt een rij."
+            )
+            log.warning("Upload rejected for %s: %s", rekening_text, reason)
+            audit.info(
+                "Upload REJECTED for %s: date order broken (%d rows attempted)",
+                rekening_text, row_count,
+            )
+            return AccountUploadResult(rekening_text, accepted=False, row_count=row_count, reason=reason)
+
         chain_breaks = conn.execute(_CHECK_BALANCE_CHAIN_SQL, params).fetchall()
         if chain_breaks:
             conn.rollback()
@@ -139,6 +158,24 @@ def _process_account_batch(
             audit.info(
                 "Upload REJECTED for %s: balance chain broken (%d rows attempted)",
                 rekening_text, row_count,
+            )
+            return AccountUploadResult(rekening_text, accepted=False, row_count=row_count, reason=reason)
+
+        totals_mismatch = conn.execute(_CHECK_BATCH_TOTALS_SQL, params).fetchone()
+        if totals_mismatch is not None:
+            conn.rollback()
+            reason = (
+                f"Eindsaldo (€ {format_amount_nl(totals_mismatch['end_balance'])}) min beginsaldo "
+                f"(€ {format_amount_nl(totals_mismatch['initial_balance'])}) = "
+                f"€ {format_amount_nl(totals_mismatch['actual_diff'])}, maar de som van bij/af in dit "
+                f"bestand komt uit op € {format_amount_nl(totals_mismatch['expected_diff'])}. "
+                "Dit bestand klopt niet in totaal — mogelijk ontbreekt een rij of staat er een "
+                "verkeerd bedrag in."
+            )
+            log.warning("Upload rejected for %s: %s", rekening_text, reason)
+            audit.info(
+                "Upload REJECTED for %s: batch totals mismatch (actual=%s, expected=%s, %d rows attempted)",
+                rekening_text, totals_mismatch["actual_diff"], totals_mismatch["expected_diff"], row_count,
             )
             return AccountUploadResult(rekening_text, accepted=False, row_count=row_count, reason=reason)
 

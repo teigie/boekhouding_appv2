@@ -11,6 +11,75 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.57] - 2026-08-24 — Upload: extra controle op datumvolgorde
+
+- **Nieuw**: een vierde upload-controle, `sql/upload/check_date_order.sql`
+  — loopt mee met de andere drie (datum-, saldoketen-, totaal- en dedup-
+  controle draaien nu allemaal ná het inserten van de batch, in
+  dezelfde transactie). Elke rij's `Datum` moet gelijk aan of later zijn
+  dan de rij ervoor, over confirmed ledger + pending categorisatie + de
+  nieuwe batch heen (zelfde combinatie/volgorde-conventie als
+  `check_balance_chain.sql`). Gelijke datums zijn prima (meerdere
+  transacties op één dag); alleen een stap terug in de tijd is een
+  overtreding. Draait als eerste van de vier, vóór de saldoketen-
+  controle — een datumprobleem is vaak de onderliggende oorzaak van een
+  latere saldoketen-breuk, dus die zie je nu het eerst.
+- In tegenstelling tot de totaalcontrole (0.0.56) is dit **geen**
+  wiskundig al-afgedekt geval: twee verwisselde rijen met toevallig
+  hetzelfde bedrag en dezelfde richting laten de saldoketen intact,
+  maar hun datums staan dan wél in de verkeerde volgorde — dit vangt dus
+  iets dat de bestaande controles kunnen missen.
+- **Bijwerking testreeks**: met deze controle vóór de saldoketen-
+  controle geeft `testdata/upload/01_batch_ok.csv` een tweede keer
+  uploaden nu "Datums lopen niet consistent op" in plaats van
+  "Saldoketen doorbroken" — nog steeds afgewezen zoals gedocumenteerd in
+  `testdata/README.md`, alleen de reden is preciezer.
+- **Geverifieerd**: de nieuwe query rechtstreeks getest op een scratch-
+  database (live database niet aangeraakt, checksum voor/na identiek) —
+  oplopende/gelijke datums geven 0 rijen, een datum die teruggaat geeft
+  precies de verwachte rij, en een expliciet geconstrueerd geval met
+  twee verwisselde rijen (zelfde bedrag/richting, dus saldoketen blijft
+  kloppen) bevestigt dat deze controle iets vangt wat de saldoketen-
+  controle alléén zou missen. Daarna de volledige bestaande testreeks
+  uit `testdata/README.md` opnieuw gedraaid tegen een verse seed-
+  database — alle 7 scenario's nog steeds hetzelfde geaccepteerd/
+  afgewezen als gedocumenteerd.
+
+## [0.0.56] - 2026-08-24 — Upload: extra saldo-totaalcontrole naast de bestaande saldoketen-controle
+
+- **Nieuw**: een derde upload-controle, `sql/upload/check_batch_totals.sql`,
+  naast de bestaande saldoketen-controle (`check_balance_chain.sql`, per
+  rij) en dedup-controle. Ná het inserten van een batch in
+  `temp_afschrift2` (zelfde transactie, zelfde moment als de andere
+  twee): het bekende saldo vóór deze batch (laatste `Saldo_na_mutatie`
+  uit `afschrift`/`temp_afschrift` voor deze rekening) plus de som van
+  alle Bij-bedragen minus alle Af-bedragen in de batch moet precies
+  uitkomen op de batch's eigen laatste `Saldo_na_mutatie`. Klopt dat
+  niet, dan `ROLLBACK` — net als de twee bestaande controles, alles-of-
+  niets per rekening. Geen prior saldo bekend (eerste upload ooit voor
+  deze rekening)? Dan wordt deze controle overgeslagen (er is dan niets
+  onafhankelijks om tegen te vergelijken) — zelfde uitzondering als de
+  saldoketen-controle al maakt voor haar allereerste rij.
+- Wiskundig gezien is dit dezelfde waarheid als de saldoketen-controle
+  al rij-voor-rij afdwingt, alleen nu in één keer opgeteld in plaats van
+  per schakel geverifieerd — bij gezonde data zal deze controle dus
+  nooit iets afkeuren wat de saldoketen-controle niet al zou hebben
+  gepakt. De waarde zit in de onafhankelijke implementatie (een aparte
+  SUM in plaats van een LAG-window): een bug in de saldoketen-query zelf
+  zou hierdoor alsnog opgevangen worden, en dit is precies de controle
+  zoals beschreven — "eindsaldo min beginsaldo = inkomsten min uitgaven"
+  voor het geüploade bestand.
+- **Geverifieerd**: de nieuwe query rechtstreeks getest op een scratch-
+  database (los van de live database, die geen moment is aangeraakt) —
+  een kloppende batch levert 0 rijen, een handmatig verkeerd gezet
+  eindsaldo levert exact de verwachte mismatch-rij op, en een rekening
+  zonder voorgeschiedenis wordt overgeslagen. Daarna de volledige
+  bestaande testreeks uit `testdata/README.md` (alle 7 scenario's: ok,
+  onregistreerd, onbekende mutatiesoort, verkeerde gebruiker,
+  saldoketen-breuk, herimport, ambigu, interne overboeking) opnieuw
+  gedraaid tegen een verse seed-database — exact dezelfde uitkomsten als
+  gedocumenteerd, dus geen regressie door de nieuwe controle.
+
 ## [0.0.55] - 2026-08-24 — Levensmiddelen-omschrijving + nieuwe suggestie "Geld opnemen"
 
 - **Nieuw**: onboarding-suggesties (`app/category_suggestions.py`)

@@ -53,7 +53,7 @@ scratch — remove it later if you don't want it kept.
 | 3 | `03_batch_unmapped_mutatiesoort.csv` | NL01TEST0000000001 | **Afgewezen** — onbekende mutatiesoort "Cryptobetaling". Beide rijen (ook de verder prima tweede rij) worden geweigerd — alles-of-niets. |
 | 4 | `04_batch_wrong_user.csv` | NL01TEST0000000003 | **Afgewezen** — rekening niet aan jouw gebruiker gekoppeld. (Vereist setup-stap 4.) |
 | 5 | `05_batch_balance_break.csv` | NL01TEST0000000001 | **Afgewezen** — saldoketen doorbroken. Upload dit ná batch 1 (hoeft verder nergens tussen). |
-| 6 | `01_batch_ok.csv` nogmaals | NL01TEST0000000001 | **Afgewezen** — saldoketen doorbroken. Een exacte herimport breekt de keten vanzelf (zie `docs/ARCHITECTURE.md`) — dit is dus ook een (impliciete) dedup-controle in actie, niet alleen de saldoketen. |
+| 6 | `01_batch_ok.csv` nogmaals | NL01TEST0000000001 | **Afgewezen** — datums lopen niet consistent op (de datum-controle draait vóór de saldoketen-controle, zie CHANGELOG 0.0.57). Een exacte herimport breekt de keten net zo goed vanzelf (zie `docs/ARCHITECTURE.md`) — dit is dus ook een (impliciete) dedup-controle in actie, niet alleen de datumvolgorde. |
 | 7 | `06_batch_ambiguous.csv` | NL01TEST0000000001 | **Geaccepteerd**, 1 rij, `processed=2` (ambigu) — geïsoleerd, één enkele rij, geen afhankelijkheid van setup-stap 2. Upload dit ná batch 1 (bouwt voort op het saldo). |
 | 8 | `07_batch_interne_overboeking.csv` | NL01TEST0000000001 | **Geaccepteerd**, 1 rij, `processed=1`, categorie Interne overboeking — geïsoleerd, één enkele rij, alleen deze match (geen Naam/Mededeling-keyword erbij). Vereist setup-stap 2. Upload dit ná batch 1 (en na batch 7 als je die ook doet — bouwt voort op het saldo). |
 
