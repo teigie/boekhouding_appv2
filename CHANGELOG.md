@@ -11,6 +11,114 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.52] - 2026-08-24 — Dashboard: vaste grafieklijnen heten voortaan "Inkomsten (totaal)"/"Uitgaven (totaal)"
+
+- **Wijziging**: de twee vaste aggregaatlijnen "Inkomsten" en "Uitgaven"
+  (`AGGREGATE_STYLES`, `app/dashboard_chart.py`) heten nu "Inkomsten
+  (totaal)" en "Uitgaven (totaal)" — in de checkbox-lijst, de
+  grafieklegenda én de tooltip. Voorkomt verwarring met een
+  gelijknamige categorie (een gebruiker kan immers zelf een categorie
+  "Inkomsten" aanmaken, zoals TestReinald al deed) die er verderop in
+  dezelfde lijst ook los tussen kan staan. "Verschil" blijft ongewijzigd.
+- **Geverifieerd** op de live app (aparte poort): nieuwe labels
+  verschijnen correct in de checkbox-lijst, de `data-label`/`<title>`
+  van elk grafiekpunt en de legenda; de samenvattingskaarten bovenaan
+  (los, hardcoded "Inkomsten"/"Uitgaven"/"Saldo (verschil)") zijn
+  bewust ongemoeid gelaten. Geen tracebacks.
+
+## [0.0.51] - 2026-08-24 — Dashboard: "Lijnen in de grafiek" krijgt nu ook subcategorie-lijnen, zelfde structuur als "Categorieën meetellen"
+
+- **Wijziging**: "Lijnen in de grafiek" was een platte checkbox-lijst
+  (de 3 vaste lijnen + één regel per categorie, alleen voor categorieën
+  die ook meetellen). Nu dezelfde opbouw als "Categorieën meetellen"
+  erboven: de 3 vaste lijnen blijven los bovenaan, categorieën daarna
+  gesplitst in Inkomsten/Uitgaven-kolommen, elk met hetzelfde kleine
+  pijltje om haar subcategorie-lijnen uit-/in te klappen. "Zonder
+  categorie"/"Zonder subcategorie" staan er los onder, precies als
+  daar.
+- **Nieuw**: een subcategorie kan nu voor het eerst zélf ook als eigen
+  lijn in de grafiek gekozen worden (`subcat:<id>`, niet eerder
+  mogelijk) — netto bedrag per maand, exact zoals een categorielijn dat
+  al deed, alleen nu gegroepeerd op subcategorie-niveau
+  (`app/routes/dashboard.py`, `monthly_totals_for_user.sql` groepeerde
+  al op subcat_ID, dat lag alleen nog niet ontsloten). Een
+  subcategorie-lijn krijgt de kleur van haar categorie (leesbaar als
+  "hoort bij") maar altijd hetzelfde vaste streepjespatroon
+  (`_SUBCATEGORY_DASH`, `app/dashboard_chart.py`) — nooit hetzelfde
+  patroon als haar eigen categorielijn, wel gedeeld tussen subcategorieën
+  van dezelfde categorie (hun labels in legenda/tooltip blijven ze
+  onderscheiden).
+- **Cascade**: (de)selecteren van een categorie-lijn (de)selecteert nu
+  ook al haar subcategorie-lijnen (zelfde `.dash-cat-checkbox`-mechanisme
+  als bij "Categorieën meetellen", nu ook toegepast op deze checkboxen
+  — geen nieuwe JS nodig). Andersom niet: een subcategorie-lijn los
+  uit-/aanvinken laat haar categorie-lijn met rust.
+- **Geverifieerd** op de live app (aparte poort) met een echte headless
+  Firefox-sessie: uit-/inklappen werkt, cascade werkt in beide
+  richtingen en via de "Alles selecteren/deselecteren"-knoppen, en een
+  geselecteerde subcategorie-lijn verschijnt daadwerkelijk in de
+  grafiek (legenda + polyline) met haar categorie's kleur en het eigen
+  vaste streepjespatroon (`3,2,1,2`, bevestigd in de gerenderde SVG).
+  Geen tracebacks.
+
+## [0.0.50] - 2026-08-24 — Dashboard: elk instelling-blok en de tabel zijn nu in-/uitklapbaar
+
+- **Wijziging**: het filterformulier boven aan het dashboard (Periode,
+  Rekeningen meetellen, Categorieën meetellen, Lijnen in de grafiek) en
+  de "Per categorie"-tabel eronder stonden allemaal permanent volledig
+  uitgeklapt — eenmaal ingesteld, blijft dat veel ruimte innemen. Elk
+  van deze vijf is nu een eigen `<details>`/`<summary>` (zelfde
+  patroon als "Nieuwe regel toevoegen" elders in de app): standaard nog
+  steeds open (niets verandert zonder actie), maar nu individueel
+  dicht te klappen zodra je hem niet meer hoeft te zien. De drie
+  samenvattingskaarten (Inkomsten/Uitgaven/Saldo) en de "Verloop over
+  tijd"-grafiek blijven altijd zichtbaar — dat is de hoofdinhoud, geen
+  instelling.
+- **Geverifieerd** op de live app (aparte poort) met een echte headless
+  Firefox-sessie (via het snap-pakket's ingebouwde `geckodriver`/
+  `firefox-bin`, rechtstreeks aangestuurd — de losse `firefox`-snap-
+  wrapper werkt niet onder deze sandbox): elk blok klapt in/uit zoals
+  verwacht, en een aangevinkte checkbox in een dichtgeklapt blok
+  (bijv. een categorie) wordt bij "Filteren" nog steeds gewoon
+  meegestuurd in de query-string — `display:none` op een input heeft
+  geen invloed op formulier-submission. Geen tracebacks.
+
+## [0.0.49] - 2026-08-24 — Dashboard: categorieën-filter gesplitst in Inkomsten/Uitgaven, uitklapbare subcategorieën
+
+- **Wijziging**: het dashboard-filter had één platte lijst met alle
+  categorieën, en daaronder een aparte platte lijst met alle
+  subcategorieën van alle categorieën samen (elk voorafgegaan door hun
+  categorienaam: "Inkomsten: Salaris"). Nu net als de profielpagina's
+  Inhoudsopgave (zie 0.0.44 t/m 0.0.48): twee kolommen ("Inkomsten"
+  links, "Uitgaven" rechts, op basis van elke categorie's `Type`), en
+  een categorie met subcategorieën krijgt hetzelfde kleine pijltje
+  (`.toc-toggle`) om haar eigen subcategorie-checkboxes uit-/in te
+  klappen — dieper ingesprongen (`5.5rem`), net als daar. "Zonder
+  categorie"/"Zonder subcategorie" staan nu samen los onder de twee
+  kolommen.
+- **Nieuw gedrag**: een categorie-checkbox (de)selecteert bij het
+  aan/uitvinken meteen al haar eigen subcategorie-checkboxes mee
+  (`.dash-cat-checkbox`, app/static/js/dashboard.js) — één richting
+  (categorie → subcategorieën), een subcategorie apart aan-/uitvinken
+  laat de categorie met rust. De "Alles selecteren"/"Alles deselecteren"
+  boven de categorieën vuren nu ook een `change`-event op elke checkbox
+  na het omzetten, zodat die cascade ook daarbij meteen meegaat — de
+  losse "Alles selecteren/deselecteren" boven de (nu verdwenen) platte
+  subcategorieën-lijst is dus niet meer nodig, dit ene knoppenpaar dekt
+  alles.
+- Het pijltje-gedrag zelf (`.toc-toggle`, tot nu toe alleen in
+  `app/static/js/user.js`) is verhuisd naar een eigen, gedeeld bestand
+  `app/static/js/toc_toggle.js`, dat zowel de profielpagina als het
+  dashboard nu laden — voorkomt dat dezelfde handler straks op twee
+  plekken uit elkaar loopt.
+- **Geverifieerd** op de live app (aparte poort): rendering klopt
+  (kolommen, insprong, pre-checked op basis van bestaande selectie),
+  filtering op een losgevinkte categorie/subcategorie werkt nog steeds
+  correct (bestaande backend-logica in app/routes/dashboard.py is
+  onveranderd), alle betrokken static bestanden (`toc_toggle.js`,
+  `dashboard.js`, `user.js`) correct uitgeleverd, profielpagina
+  onaangetast, geen tracebacks.
+
 ## [0.0.48] - 2026-08-24 — Inhoudsopgave: subcategorieën nóg dieper ingesprongen
 
 - **Wijziging** (vervolg op 0.0.47): `2.75rem` insprong was nog steeds

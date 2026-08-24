@@ -51,6 +51,7 @@ from app.dashboard_chart import (
     month_end,
     month_range,
     parse_month,
+    subcategory_style,
 )
 from app.db import get_connection
 from app.formatting import format_amount_nl
@@ -246,21 +247,39 @@ def home(
     for r in filtered_rows:
         m = r["month"]
         cat_line_key = f"cat:{_cat_key(r['cat_id'])}"
+        subcat_line_key = f"subcat:{_cat_key(r['subcat_id'])}"
         monthly_values[(m, "inkomsten")] = monthly_values.get((m, "inkomsten"), 0.0) + r["totaal_bij"]
         monthly_values[(m, "uitgaven")] = monthly_values.get((m, "uitgaven"), 0.0) + r["totaal_af"]
         monthly_values[(m, cat_line_key)] = monthly_values.get((m, cat_line_key), 0.0) + (r["totaal_bij"] - r["totaal_af"])
+        monthly_values[(m, subcat_line_key)] = (
+            monthly_values.get((m, subcat_line_key), 0.0) + (r["totaal_bij"] - r["totaal_af"])
+        )
     for m in months:
         monthly_values[(m, "verschil")] = monthly_values.get((m, "inkomsten"), 0.0) - monthly_values.get((m, "uitgaven"), 0.0)
 
-    # Only categories still in-scope (selected_cat_ids) can be graphed —
-    # keeps "what's plotted" a subset of "what's counted", never a
-    # category the totals above have already excluded.
+    # The fixed aggregate lines only — "Lijnen in de grafiek" renders its
+    # per-(sub)categorie checkboxes itself, nested by Inkomsten/Uitgaven
+    # exactly like "Categorieën meetellen" (see graph_category_lines
+    # below), rather than off this flat list.
     graph_line_options = [{"key": k, "label": v["label"]} for k, v in AGGREGATE_STYLES.items()]
+
+    # Only (sub)categories still in-scope (selected_cat_ids/
+    # selected_subcat_ids) can be graphed — keeps "what's plotted" a
+    # subset of "what's counted", never a (sub)category the totals above
+    # have already excluded. Pre-filtered here (rather than in the
+    # template, like categorieen/subcategorieen are for "Categorieën
+    # meetellen") since membership needs comparing against those
+    # string-ID sets — cleaner in Python than re-deriving it in Jinja.
+    graph_category_lines = []
     for c in categorieen:
-        if str(c["ID"]) in selected_cat_ids:
-            graph_line_options.append({"key": f"cat:{c['ID']}", "label": c["Name"]})
-    if _NONE_CAT_KEY in selected_cat_ids:
-        graph_line_options.append({"key": "cat:none", "label": "Zonder categorie"})
+        if str(c["ID"]) not in selected_cat_ids:
+            continue
+        subcats = [
+            {"ID": sc["ID"], "Name": sc["Name"]}
+            for sc in subcategorieen
+            if sc["cat_ID"] == c["ID"] and str(sc["ID"]) in selected_subcat_ids
+        ]
+        graph_category_lines.append({"ID": c["ID"], "Name": c["Name"], "Type": c["Type"], "subcategorieen": subcats})
 
     line_defs = []
     for key in AGGREGATE_STYLES:
@@ -270,8 +289,18 @@ def home(
         line_key = f"cat:{c['ID']}"
         if line_key in selected_graph_lines and str(c["ID"]) in selected_cat_ids:
             line_defs.append({"key": line_key, **category_style(c["ID"], c["Name"])})
+    for sc in subcategorieen:
+        line_key = f"subcat:{sc['ID']}"
+        if (
+            line_key in selected_graph_lines
+            and str(sc["ID"]) in selected_subcat_ids
+            and str(sc["cat_ID"]) in selected_cat_ids
+        ):
+            line_defs.append({"key": line_key, **subcategory_style(sc["cat_ID"], sc["Name"])})
     if "cat:none" in selected_graph_lines and _NONE_CAT_KEY in selected_cat_ids:
         line_defs.append({"key": "cat:none", **category_style(None, "Zonder categorie")})
+    if "subcat:none" in selected_graph_lines and _NONE_CAT_KEY in selected_subcat_ids:
+        line_defs.append({"key": "subcat:none", **subcategory_style(None, "Zonder subcategorie")})
 
     series = build_series(months, line_defs, monthly_values)
     chart = build_chart(months, series)
@@ -293,6 +322,7 @@ def home(
             "selected_subcat_ids": selected_subcat_ids,
             "selected_graph_lines": selected_graph_lines,
             "graph_line_options": graph_line_options,
+            "graph_category_lines": graph_category_lines,
             "chart": chart,
             "months_json": json.dumps(months),
             "presets": _build_presets(today, (bounds["min_datum"], bounds["max_datum"]) if bounds else (None, None)),

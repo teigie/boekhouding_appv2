@@ -21,28 +21,4 @@
       }
     });
   });
-
-  // Inhoudsopgave: small chevron toggles, separate from the (sub)category's
-  // own navigation chip — clicking the name just jumps to it, clicking a
-  // toggle only reveals/hides something right there in the Inhoudsopgave:
-  // a category's toggle (left of its name) shows/hides its subcategories,
-  // a (sub)category's toggle (right of its name, only present when there's
-  // a description) shows/hides that description text (see
-  // app/templates/user.html). Both share this one handler — data-target
-  // names the element to show/hide, data-expanded-display its display
-  // value when shown ("flex" if omitted). aria-expanded drives the arrow's
-  // rotation via CSS (app/static/css/style.css's
-  // .toc-toggle[aria-expanded="true"]).
-  document.querySelectorAll(".toc-toggle").forEach(function (button) {
-    var target = document.getElementById(button.dataset.target);
-    if (!target) {
-      return;
-    }
-    var expandedDisplay = button.dataset.expandedDisplay || "flex";
-    button.addEventListener("click", function () {
-      var expanded = button.getAttribute("aria-expanded") === "true";
-      button.setAttribute("aria-expanded", String(!expanded));
-      target.style.display = expanded ? "none" : expandedDisplay;
-    });
-  });
 })();

@@ -410,6 +410,15 @@ summary {
   color: var(--accent);
 }
 
+/* Dashboard filter sections (Periode, Rekeningen/Categorieën
+   meetellen, Lijnen in de grafiek) and the "Per categorie" results
+   table (see app/templates/index.html) are each their own <details>,
+   collapsible independently so a user who's already set them up can
+   shrink the page down to just what they still need to see. */
+.dashboard-section summary {
+  font-weight: 500;
+}
+
 .toc-row {
   display: flex;
   align-items: center;

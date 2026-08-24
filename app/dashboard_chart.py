@@ -31,8 +31,8 @@ from typing import Optional
 # Fixed roles always get the same color + dash pattern, regardless of
 # which categories are also selected.
 AGGREGATE_STYLES = {
-    "inkomsten": {"label": "Inkomsten", "color_var": "--series-inkomsten", "dash": "none"},
-    "uitgaven": {"label": "Uitgaven", "color_var": "--series-uitgaven", "dash": "8,4"},
+    "inkomsten": {"label": "Inkomsten (totaal)", "color_var": "--series-inkomsten", "dash": "none"},
+    "uitgaven": {"label": "Uitgaven (totaal)", "color_var": "--series-uitgaven", "dash": "8,4"},
     "verschil": {"label": "Verschil", "color_var": "--series-verschil", "dash": "2,3"},
 }
 # Distinct from the three aggregate hues above — see style.css for the
@@ -44,6 +44,10 @@ CATEGORY_COLOR_VARS = [
 # hue (e.g. many categories selected at once) still reads as a distinct
 # line — "identity is never color-alone".
 _DASH_PATTERNS = ["none", "8,4", "2,3", "10,3,2,3"]
+# A subcategory line always uses this one fixed dash (never one of
+# _DASH_PATTERNS above, so it can never coincidentally match its own
+# parent's dash) — see subcategory_style().
+_SUBCATEGORY_DASH = "3,2,1,2"
 
 
 def parse_month(value: Optional[str], fallback: date) -> date:
@@ -98,6 +102,24 @@ def category_style(cat_id, category_name: str) -> dict:
         "label": category_name,
         "color_var": CATEGORY_COLOR_VARS[key % len(CATEGORY_COLOR_VARS)],
         "dash": _DASH_PATTERNS[key % len(_DASH_PATTERNS)],
+    }
+
+
+def subcategory_style(cat_id, subcategory_name: str) -> dict:
+    """A subcategory's line inherits its parent category's color
+    (cat_id, same rule as category_style — stable by ID, "Zonder
+    categorie"'s subcategories pass None here same as their parent
+    would) so it visually groups with that category, but always gets
+    this module's one fixed _SUBCATEGORY_DASH rather than a dash cycled
+    by its own subcat_id — that guarantees a subcategory's line can
+    never coincidentally render identical (same color AND dash) to its
+    own parent's line. Siblings under the same category do share this
+    look (color + dash both fixed to the parent), which is an accepted
+    trade-off — their legend/tooltip labels still disambiguate them."""
+    return {
+        "label": subcategory_name,
+        "color_var": category_style(cat_id, "")["color_var"],
+        "dash": _SUBCATEGORY_DASH,
     }
 
 

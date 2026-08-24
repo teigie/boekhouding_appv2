@@ -20,13 +20,36 @@
   // grafieklijnen-checkboxes (data-check-group is de checkbox-naam, dus
   // dit werkt voor elke checkbox-groep die zo'n knoppenpaar krijgt) — zet
   // alleen de checkboxen zelf om, submit niets: de gebruiker klikt zelf
-  // nog op "Filteren" zodra de selectie klopt.
+  // nog op "Filteren" zodra de selectie klopt. Een "change"-event erna
+  // laat de cascade-handler hieronder meteen ook de bijbehorende
+  // subcategorieën meenemen wanneer dit de cat_ids-groep is (op andere
+  // groepen, zoals graph_lines, luistert niets naar dat event — die doen
+  // dus gewoon niets extra).
   document.querySelectorAll(".checkbox-toggle-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var checked = btn.dataset.checkAction === "all";
       var selector = 'input[type="checkbox"][name="' + btn.dataset.checkGroup + '"]';
       document.querySelectorAll(selector).forEach(function (box) {
         box.checked = checked;
+        box.dispatchEvent(new Event("change"));
+      });
+    });
+  });
+
+  // Een categorie-checkbox met eigen subcategorieën (.dash-cat-checkbox,
+  // data-subcat-group wijst naar het bijbehorende blokje, zie
+  // app/templates/index.html) selecteert/deselecteert bij het
+  // aan/uitvinken meteen al haar subcategorie-checkboxes mee — een
+  // subcategorie is toch niet relevant zodra haar categorie zelf niet
+  // meetelt. Werkt in één richting (categorie → subcategorieën); een
+  // subcategorie apart uit-/aanvinken laat de categorie-checkbox met
+  // rust.
+  document.querySelectorAll(".dash-cat-checkbox").forEach(function (box) {
+    var group = document.getElementById(box.dataset.subcatGroup);
+    if (!group) return;
+    box.addEventListener("change", function () {
+      group.querySelectorAll('input[type="checkbox"]').forEach(function (sub) {
+        sub.checked = box.checked;
       });
     });
   });
