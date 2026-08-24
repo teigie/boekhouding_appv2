@@ -2,7 +2,9 @@
 
 Signup creates a User and their first Rekening together, in one
 transaction, since a user isn't useful for uploading anything without at
-least one linked account.
+least one linked account. From there it redirects to the onboarding
+suggestions page (app/routes/onboarding.py), not straight to the
+dashboard — a brand-new user has zero categories yet.
 """
 import sqlite3
 
@@ -97,7 +99,9 @@ def create_user_and_login(request: Request, name: str = Form(...), rekening: str
         conn.close()
     log_in(request, user_id, name, previous_login=None)  # brand new user, no prior login
     log.info("New user %s (id=%s) created with account %s", name, user_id, rekening)
-    return RedirectResponse("/", status_code=303)
+    # Straight to the onboarding suggestions page instead of the (still
+    # completely empty) dashboard — see app/routes/onboarding.py.
+    return RedirectResponse("/onboarding/suggesties", status_code=303)
 
 
 @router.post("/logout")

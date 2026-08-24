@@ -11,6 +11,74 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.55] - 2026-08-24 — Levensmiddelen-omschrijving + nieuwe suggestie "Geld opnemen"
+
+- **Nieuw**: onboarding-suggesties (`app/category_suggestions.py`)
+  krijgen nu ook een optionele `description` per categorie — alleen
+  "Levensmiddelen" heeft er voorlopig één: "Dagelijkse boodschappen,
+  verzorgingsproducten bij drogist en schoonmaakmiddelen dagelijks
+  gebruik." `app/routes/onboarding.py` geeft die description nu door
+  bij het aanmaken (`cat.get("description")` in plaats van altijd
+  `None`) — een gebruiker die deze suggestie vanaf nu accepteert krijgt
+  hem er meteen bij.
+- **Nieuw**: "Geld opnemen" toegevoegd aan de Uitgaven-suggesties, naast
+  Bankkosten.
+- **Correctie in de bestaande database**: elke al bestaande categorie
+  "Levensmiddelen" (TestUser, TestReinald, test3 — alle drie hadden hem
+  al, via eerdere onboarding-acceptatie of handmatig aangemaakt) heeft
+  nu retroactief dezelfde omschrijving gekregen, via de bestaande route
+  `POST /categories/{id}/description` (geen nieuw script — gewoon de
+  route die de UI ook gebruikt). "Geld opnemen" is daarnaast ook
+  meteen als echte categorie (Uitgaven) aangemaakt voor test3, via
+  `POST /categories`.
+- **Geverifieerd** op de live app (aparte poort, DB vooraf
+  gebackupt): alle drie de Levensmiddelen-rijen dragen nu de
+  omschrijving, test3 heeft "Geld opnemen" (Uitgaven, ID 81), profiel-
+  pagina van test3 rendert beide correct (ToC-omschrijving, regels-
+  sectie-textarea, nieuwe categoriekaart). Geen tracebacks.
+
+## [0.0.54] - 2026-08-24 — Onboarding-suggesties: "Netflix" hernoemd naar "Streamingdienst"
+
+- **Correctie**: de subcategorie "Netflix" onder "Abonnementen" in
+  `app/category_suggestions.py` heette per ongeluk naar één specifieke
+  dienst — hernoemd naar het generieke "Streamingdienst".
+
+## [0.0.53] - 2026-08-24 — Onboarding: voorgestelde categorieën direct na het aanmaken van een nieuwe gebruiker
+
+- **Nieuw**: een nieuwe gebruiker (`POST /login/new`, `app/routes/auth.py`)
+  komt niet meer meteen op het (dan nog helemaal lege) dashboard uit,
+  maar eerst op `/onboarding/suggesties` — een nieuwe pagina
+  (`app/routes/onboarding.py`, `app/templates/onboarding_suggesties.html`)
+  die een curated standaardset categorieën en subcategorieën toont,
+  gesplitst in Inkomsten/Uitgaven (zelfde kleuren/kolom-indeling als
+  elders in de app). Eén simpele keuze: "Ja, deze toevoegen" zet ze
+  allemaal voor de gebruiker klaar; "Nee, overslaan" voegt niets toe —
+  in beide gevallen ga je daarna gewoon naar het dashboard, zoals
+  voorheen altijd al gebeurde.
+- De voorgestelde lijst zelf staat vast in `app/category_suggestions.py`
+  (Python-data, geen databasetabel — vergelijkbaar met maar los van de
+  bestaande, platte `afschrift_categorie_suggesties`-tabel achter de
+  losse suggestie-chips op /categories, die geen hiërarchie of Type
+  kent). "Levensmiddelen" stond twee keer in de oorspronkelijke lijst
+  (waarschijnlijk een kopieerfoutje) — hier maar één keer opgenomen.
+- Deze pagina is niet exclusief voor het moment van aanmaken: elke
+  ingelogde gebruiker kan hem via de URL opnieuw bezoeken (geen link in
+  de navigatie) om ontbrekende voorgestelde (sub)categorieën alsnog toe
+  te voegen. Een categorienaam die al bestaat wordt bij "Ja" gewoon
+  overgeslagen (geen foutmelding, geen dubbele rij) — de bijbehorende
+  subcategorieën van een overgeslagen categorie worden dan ook niet
+  aangemaakt.
+- **Geverifieerd** op de live app (aparte poort, echte tijdelijke
+  testgebruikers, live database met vooraf backup): signup redirect
+  naar de nieuwe pagina, pagina toont alle 22 categorieën met hun
+  subcategorieën correct (incl. de Levensmiddelen-dedup), "Ja" zet ze
+  allemaal met het juiste Type en de juiste subcategorie-koppeling in
+  de database, nogmaals "Ja" klikken op dezelfde (nu gevulde) gebruiker
+  crasht niet en voegt niets dubbel toe, "Nee" voegt niets toe. Test-
+  gebruikers en hun rijen daarna weer volledig verwijderd, geen
+  `foreign_key_check`-schendingen achtergebleven, bestaande gebruikers
+  (TestUser/UserB/TestReinald) ongemoeid. Geen tracebacks.
+
 ## [0.0.52] - 2026-08-24 — Dashboard: vaste grafieklijnen heten voortaan "Inkomsten (totaal)"/"Uitgaven (totaal)"
 
 - **Wijziging**: de twee vaste aggregaatlijnen "Inkomsten" en "Uitgaven"

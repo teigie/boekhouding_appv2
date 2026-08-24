@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Voorgestelde categorieën{% endblock %}
+{% block content %}
+  <h1>Voorgestelde categorieën</h1>
+  <p class="muted">
+    Welkom, {{ user["name"] }}! Wil je beginnen met een standaardset
+    categorieën en subcategorieën? Je kunt ze hierna altijd nog
+    aanpassen, aanvullen of verwijderen op je
+    <a href="/user/{{ user['name'] | urlencode }}">profielpagina</a>.
+  </p>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <div class="table-actions" style="align-items: flex-start; gap: 2rem; flex-wrap: wrap;">
+      {% for group in suggestions %}
+        <div style="flex: 1; min-width: 240px;">
+          <h3 style="margin-top: 0; color: var({{ '--series-inkomsten' if group.type == 'Inkomsten' else '--series-uitgaven' }});">{{ group.type }}</h3>
+          <ul style="margin: 0.5rem 0 0; padding-left: 1.1rem;">
+            {% for cat in group.categories %}
+              <li style="margin-bottom: 0.35rem;">
+                {{ cat.name }}
+                {% if cat.subcategorieen %}
+                  <ul style="margin: 0.2rem 0 0.35rem;">
+                    {% for sub in cat.subcategorieen %}
+                      <li class="muted">{{ sub }}</li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="/onboarding/suggesties" style="margin-top: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+      <button type="submit" name="action" value="accept">Ja, deze toevoegen</button>
+      <button type="submit" name="action" value="skip" class="link-button">Nee, overslaan</button>
+    </form>
+  </section>
+{% endblock %}
