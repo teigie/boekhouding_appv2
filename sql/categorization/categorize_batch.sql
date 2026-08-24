@@ -12,8 +12,8 @@
 -- being silently treated as "unresolved"). `processed` reflects only the
 -- rule-match outcome — see sql/categorization/README.md and
 -- match_custom_rules.sql (embedded below) for the full matching
--- semantics: AND across a rule's own columns, per-column AND/OR across
--- that column's own keywords, OR across a category's rules.
+-- semantics: AND across a rule's own columns, AND across a column's own
+-- keywords, OR across a category's rules.
 --
 -- Current combination strategy (not final, expected to change — see
 -- sql/categorization/README.md):
@@ -58,7 +58,7 @@ WITH rule_matches AS (
           FROM afschrift_cat_regel_kolommen gk
           JOIN afschrift_cat_regel_keywords k ON k.regel_kolom_ID = gk.ID
           WHERE gk.regel_ID = r.ID
-          GROUP BY gk.ID, gk.combine_mode
+          GROUP BY gk.ID
           HAVING
             SUM(
               CASE
@@ -75,7 +75,7 @@ WITH rule_matches AS (
               END
             )
             <
-            CASE WHEN gk.combine_mode = 'AND' THEN COUNT(*) ELSE 1 END
+            COUNT(*)
       )
 ),
 match_summary AS (

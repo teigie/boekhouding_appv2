@@ -12,13 +12,11 @@
 -- match every row).
 --
 -- Each column-condition has one or more keywords
--- (afschrift_cat_regel_keywords) plus its own combine_mode:
---   'OR'  — the column matches if ANY of its keywords match the row
---   'AND' — the column matches if ALL of its keywords match the row
--- Implemented below as: for each (rule, column) group, count how many of
--- its keywords match; the group FAILS if that count is < 1 (OR mode) or
--- < the total keyword count (AND mode). A rule matches iff NO group
--- attached to it fails.
+-- (afschrift_cat_regel_keywords), always combined with AND — the column
+-- matches only if ALL of its keywords match the row. Implemented below
+-- as: for each (rule, column) group, count how many of its keywords
+-- match; the group FAILS if that count is less than the total keyword
+-- count. A rule matches iff NO group attached to it fails.
 --
 -- Matching per column, by type:
 --   Naam, Tegenrekening, Mededeling, Tag, Mutatiesoort — substring (LIKE)
@@ -55,7 +53,7 @@ WHERE t.Rekening = :rekening_text
       FROM afschrift_cat_regel_kolommen gk
       JOIN afschrift_cat_regel_keywords k ON k.regel_kolom_ID = gk.ID
       WHERE gk.regel_ID = r.ID
-      GROUP BY gk.ID, gk.combine_mode
+      GROUP BY gk.ID
       HAVING
         SUM(
           CASE
@@ -72,5 +70,5 @@ WHERE t.Rekening = :rekening_text
           END
         )
         <
-        CASE WHEN gk.combine_mode = 'AND' THEN COUNT(*) ELSE 1 END
+        COUNT(*)
   );

@@ -76,16 +76,15 @@ _REMOVE_SUBCATEGORY_SQL = (
 
 def _current_columns_map(rows) -> dict:
     """Groups list_kolommen_for_regel.sql's flat rows into
-    {kolom: {"mode": "AND"/"OR", "keywords_text": "kw1\\nkw2"}}, ready to
-    pre-fill the rule-edit form's textareas/selects. Also used to rebuild
-    the same shape from a just-submitted (invalid) form, so a validation
-    error re-renders with what the user actually typed, not stale DB
-    values — see save_regel below."""
+    {kolom: {"keywords_text": "kw1\\nkw2"}}, ready to pre-fill the
+    rule-edit form's textareas. Also used to rebuild the same shape from
+    a just-submitted (invalid) form, so a validation error re-renders
+    with what the user actually typed, not stale DB values — see
+    save_regel below."""
     out: dict = {}
     for row in rows:
-        entry = out.setdefault(row["kolom"], {"mode": row["combine_mode"], "keywords": []})
-        entry["keywords"].append(row["keyword"])
-    return {kolom: {"mode": entry["mode"], "keywords_text": "\n".join(entry["keywords"])} for kolom, entry in out.items()}
+        out.setdefault(row["kolom"], []).append(row["keyword"])
+    return {kolom: {"keywords_text": "\n".join(keywords)} for kolom, keywords in out.items()}
 
 
 @router.post("/categories")
@@ -262,11 +261,11 @@ def delete_subcategory(request: Request, subcat_id: int):
 @router.post("/categories/{cat_id}/regels")
 async def add_regel(request: Request, cat_id: int):
     """Create a new rule under a category from the profile page's
-    per-category "add rule" form: one optional {column}_keywords /
-    {column}_mode field pair per supported column (app.categorization_rules
-    .COLUMN_NAMES). Only columns with a non-empty keyword list become an
-    actual column-condition — the rest are simply not part of the rule.
-    All of it is created in one transaction, so a submitted rule is never
+    per-category "add rule" form: one optional {column}_keywords field
+    per supported column (app.categorization_rules.COLUMN_NAMES). Only
+    columns with a non-empty keyword list become an actual
+    column-condition — the rest are simply not part of the rule. All of
+    it is created in one transaction, so a submitted rule is never
     partially saved."""
     user = require_login(request)
     if isinstance(user, RedirectResponse):
@@ -283,21 +282,18 @@ async def add_regel(request: Request, cat_id: int):
             conn, user["id"], form.get("subcat_id", ""), form.get("new_subcategory_name", "")
         )
 
-        columns = []  # [(kolom, combine_mode, [keyword, ...]), ...]
+        columns = []  # [(kolom, [keyword, ...]), ...]
         error = None
         for kolom in COLUMN_NAMES:
             raw_values = split_keywords(form.get(f"{kolom}_keywords", ""), column=kolom)
             if not raw_values:
                 continue
-            mode = form.get(f"{kolom}_mode", "OR")
-            if mode not in ("AND", "OR"):
-                mode = "OR"
             try:
                 normalized = [normalize_keyword(kolom, v) for v in raw_values]
             except InvalidKeywordError as exc:
                 error = str(exc)
                 break
-            columns.append((kolom, mode, normalized))
+            columns.append((kolom, normalized))
 
         if error is None and not columns:
             error = "Een regel heeft minstens één voorwaarde nodig — vul minstens één kolom in."
@@ -308,10 +304,10 @@ async def add_regel(request: Request, cat_id: int):
                     _ADD_REGEL_SQL, {"cat_id": cat_id, "subcat_id": subcat_id, "user_id": user["id"]}
                 )
                 regel_id = cursor.lastrowid
-                for kolom, mode, keywords in columns:
+                for kolom, keywords in columns:
                     kolom_cursor = conn.execute(
                         _ADD_REGEL_KOLOM_SQL,
-                        {"regel_id": regel_id, "kolom": kolom, "combine_mode": mode, "user_id": user["id"]},
+                        {"regel_id": regel_id, "kolom": kolom, "user_id": user["id"]},
                     )
                     kolom_id = kolom_cursor.lastrowid
                     for keyword in keywords:
@@ -411,15 +407,12 @@ async def save_regel(request: Request, regel_id: int):
         submitted_new_subcategory_name = form.get("new_subcategory_name", "")
         subcat_id = resolve_or_create_subcategory(conn, user["id"], submitted_subcat_id, submitted_new_subcategory_name)
 
-        columns = []  # [(kolom, combine_mode, [keyword, ...]), ...]
-        submitted = {}  # kolom -> {"mode", "keywords_text"} as typed, for re-render on error
+        columns = []  # [(kolom, [keyword, ...]), ...]
+        submitted = {}  # kolom -> {"keywords_text"} as typed, for re-render on error
         error = None
         for kolom in COLUMN_NAMES:
             raw_text = form.get(f"{kolom}_keywords", "")
-            mode = form.get(f"{kolom}_mode", "OR")
-            if mode not in ("AND", "OR"):
-                mode = "OR"
-            submitted[kolom] = {"mode": mode, "keywords_text": raw_text}
+            submitted[kolom] = {"keywords_text": raw_text}
 
             raw_values = split_keywords(raw_text, column=kolom)
             if not raw_values:
@@ -429,7 +422,7 @@ async def save_regel(request: Request, regel_id: int):
             except InvalidKeywordError as exc:
                 error = str(exc)
                 break
-            columns.append((kolom, mode, normalized))
+            columns.append((kolom, normalized))
 
         if error is None and not columns:
             error = "Een regel heeft minstens één voorwaarde nodig — vul minstens één kolom in."
@@ -440,10 +433,10 @@ async def save_regel(request: Request, regel_id: int):
                     _SET_REGEL_SUBCATEGORY_SQL, {"regel_id": regel_id, "subcat_id": subcat_id, "user_id": user["id"]}
                 )
                 conn.execute(_REMOVE_REGEL_KOLOMMEN_FOR_REGEL_SQL, {"regel_id": regel_id, "user_id": user["id"]})
-                for kolom, mode, keywords in columns:
+                for kolom, keywords in columns:
                     kolom_cursor = conn.execute(
                         _ADD_REGEL_KOLOM_SQL,
-                        {"regel_id": regel_id, "kolom": kolom, "combine_mode": mode, "user_id": user["id"]},
+                        {"regel_id": regel_id, "kolom": kolom, "user_id": user["id"]},
                     )
                     kolom_id = kolom_cursor.lastrowid
                     for keyword in keywords:

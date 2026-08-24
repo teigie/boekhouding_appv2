@@ -65,7 +65,7 @@ rule_matches AS (
         FROM afschrift_cat_regel_kolommen gk
         JOIN afschrift_cat_regel_keywords k ON k.regel_kolom_ID = gk.ID
         WHERE gk.regel_ID = r.ID
-        GROUP BY gk.ID, gk.combine_mode
+        GROUP BY gk.ID
         HAVING
           SUM(
             CASE
@@ -86,7 +86,7 @@ rule_matches AS (
             END
           )
           <
-          CASE WHEN gk.combine_mode = 'AND' THEN COUNT(*) ELSE 1 END
+          COUNT(*)
     )
 ),
 match_summary AS (

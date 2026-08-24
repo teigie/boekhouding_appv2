@@ -22,9 +22,11 @@ about, over `Naam`, `Tegenrekening`, `Code`, `Af_bij`, `Bedrag_eur`,
 absent from a rule is never checked ("no value = no check"). ALL columns
 a rule *does* have must match for the rule itself to match (AND across
 columns). Each column-condition carries one or more keywords/values
-(`afschrift_cat_regel_keywords`) plus its own `combine_mode`: `'OR'`
-matches if ANY of that column's keywords match the row, `'AND'` requires
-ALL of them to match simultaneously. All of the above is per-user, like
+(`afschrift_cat_regel_keywords`), which always ALL have to match
+simultaneously (AND across a column's own keywords — there used to be an
+OR option here too, but it was removed: "any of these" belongs as a
+separate rule, not a choice within one column). All of the above is
+per-user, like
 `afschrift_categorien` itself, and every layer (rule/column/keyword) is
 scoped to the categorizing user's own `user_ID`.
 

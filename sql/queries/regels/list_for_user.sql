@@ -22,7 +22,6 @@ SELECT
     sc.Name AS subcat_name,
     gk.ID AS kolom_ID,
     gk.kolom,
-    gk.combine_mode,
     k.ID AS keyword_ID,
     k.keyword
 FROM afschrift_cat_regels r

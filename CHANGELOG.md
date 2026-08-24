@@ -11,6 +11,36 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.38] - 2026-08-24 — OF verwijderd: keywords binnen een regel-kolom zijn nu altijd EN
+
+- **Wijziging**: de EN/OF-keuze (`combine_mode`) voor hoe de keywords
+  binnen één kolom-voorwaarde van een regel combineren is verwijderd —
+  zo'n kolom vereist nu altijd dat alle keywords tegelijk voorkomen (EN).
+  "Één van deze" ("OF") is niet meer instelbaar; wil je dat gedrag, maak
+  dan een aparte regel per keyword — een categorie matcht immers al
+  zodra één van haar regels matcht (OF over de regels van een
+  categorie, ongewijzigd). De "Combineren met"-dropdown is weg uit het
+  "Nieuwe regel toevoegen"-formulier en de regel-bewerkpagina
+  (`app/templates/user.html`, `regel_edit.html`); de kolom
+  `afschrift_cat_regel_kolommen.combine_mode` is uit `sql/schema.sql`
+  verwijderd en de matching-SQL (`match_custom_rules.sql`,
+  `categorize_batch.sql`, `recategorize_temp_afschrift.sql`) is
+  vereenvoudigd naar altijd-EN.
+- **Migratie**: `scripts/migrate_remove_combine_mode.py` (eenmalig, met
+  automatische backup) zet bestaande regels om. De 15 bestaande
+  kolom-groepen die op OF stonden hadden allemaal maar 1 keyword — EN en
+  OF zijn daar identiek, dus geen gedragswijziging. De ene groep met 2+
+  keywords op OF (de "Interne overboeking"-regel, Tegenrekening met 2
+  IBAN's) is automatisch gesplitst in 2 losse regels, één per IBAN, zodat
+  het matchgedrag exact hetzelfde blijft (via de bestaande OF-over-regels
+  van een categorie).
+- **Geverifieerd** op een geïsoleerde scratch-kopie: matchgedrag vóór en
+  na de migratie is identiek voor de gesplitste regel (beide IBAN's
+  matchen nog steeds, een derde IBAN nog steeds niet). Op de live app
+  (aparte poort): profielpagina en regel-bewerkpagina renderen correct
+  zonder de oude dropdown, en een nieuwe regel met 2 keywords op één
+  kolom wordt correct als EN opgeslagen.
+
 ## [0.0.37] - 2026-08-20 — Geldbedragen op scherm nu in Nederlands formaat
 
 - **Nieuw**: elk geldbedrag dat op scherm getoond wordt (dashboard-

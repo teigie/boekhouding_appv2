@@ -12,9 +12,12 @@
     <p class="muted">
       Elke kolom hieronder telt mee als voorwaarde zodra je er een keyword
       in typt — laat een kolom helemaal leeg om hem niet (meer) te
-      controleren. Meerdere keywords: één per regel, of gescheiden door
-      een komma — behalve bij Bedrag en Saldo na mutatie, waar een komma
-      het decimaalteken is: daar telt elke regel als één bedrag (bijv.
+      controleren. Meerdere keywords in één kolom moeten allemaal
+      voorkomen (EN) — wil je "één van deze", maak dan een aparte regel
+      per keyword; een categorie matcht al zodra één van haar regels
+      matcht. Meerdere keywords: één per regel, of gescheiden door een
+      komma — behalve bij Bedrag en Saldo na mutatie, waar een komma het
+      decimaalteken is: daar telt elke regel als één bedrag (bijv.
       "1.234,56" op de eerste regel, "99,95" op de tweede).
     </p>
     <form method="post" action="/categories/regels/{{ regel['ID'] }}/edit">
@@ -45,12 +48,6 @@
           <div>
             <label>{{ kolom.label }}<br>
               <textarea name="{{ kolom.name }}_keywords" rows="3" placeholder="{{ kolom.placeholder }}">{{ huidig.get("keywords_text", "") }}</textarea>
-            </label>
-            <label class="muted">Combineren met<br>
-              <select name="{{ kolom.name }}_mode">
-                <option value="OR" {{ "selected" if huidig.get("mode", "AND") == "OR" }}>OF — matcht als één van de keywords voorkomt</option>
-                <option value="AND" {{ "selected" if huidig.get("mode", "AND") == "AND" }}>EN — moet allemaal voorkomen</option>
-              </select>
             </label>
           </div>
         {% endfor %}

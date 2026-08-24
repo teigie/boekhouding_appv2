@@ -34,7 +34,7 @@ def user_page_url(username: str) -> str:
 def _group_regels_by_category(rows) -> dict:
     """The flat (regel, kolom, keyword) rows from list_for_user.sql,
     nested into cat_ID -> [ {"ID": regel_ID, "subcat_ID", "subcat_name",
-    "kolommen": [{"ID", "kolom", "combine_mode", "keywords": [{"ID",
+    "kolommen": [{"ID", "kolom", "keywords": [{"ID",
     "keyword"}, ...]}, ...]} , ...]. Dict insertion order (Python 3.7+)
     keeps the original regel_ID/kolom_ID/keyword_ID ordering from the
     query intact."""
@@ -47,7 +47,7 @@ def _group_regels_by_category(rows) -> dict:
         )
         kolom = regel["kolommen"].setdefault(
             row["kolom_ID"],
-            {"ID": row["kolom_ID"], "kolom": row["kolom"], "combine_mode": row["combine_mode"], "keywords": []},
+            {"ID": row["kolom_ID"], "kolom": row["kolom"], "keywords": []},
         )
         kolom["keywords"].append({"ID": row["keyword_ID"], "keyword": row["keyword"]})
 

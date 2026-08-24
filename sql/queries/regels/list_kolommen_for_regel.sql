@@ -4,7 +4,7 @@
 --
 -- Params: :regel_id, :user_id
 
-SELECT gk.kolom, gk.combine_mode, k.keyword
+SELECT gk.kolom, k.keyword
 FROM afschrift_cat_regel_kolommen gk
 JOIN afschrift_cat_regel_keywords k ON k.regel_kolom_ID = gk.ID
 WHERE gk.regel_ID = :regel_id

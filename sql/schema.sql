@@ -106,13 +106,15 @@ create table afschrift_cat_regels (
 -- across columns, hence the `unique (regel_ID, kolom)` — a rule can only
 -- have one condition per column, not two independent ones).
 --
--- combine_mode governs how that COLUMN's own keywords (below) combine:
--- 'OR' matches if ANY of them match the row, 'AND' requires ALL of them
--- to match simultaneously (only meaningful for substring columns where a
--- field can contain more than one phrase at once, e.g. Mededeling
--- containing both "Salaris" AND "maandelijks" — for a single-valued
--- column like Af_bij, 'AND' with two different keywords can never match
--- anything, which the app allows rather than blocks).
+-- That COLUMN's own keywords (below) always combine with AND — ALL of
+-- them must match simultaneously (only meaningful for substring columns
+-- where a field can contain more than one phrase at once, e.g.
+-- Mededeling containing both "Salaris" AND "maandelijks" — for a
+-- single-valued column like Af_bij, two different keywords can then
+-- never match anything, which the app allows rather than blocks; an OR
+-- across keywords used to be selectable here too but was removed —
+-- express "any of these" as separate rules instead, which OR together
+-- via a category's rules above).
 --
 -- A column-group is expected to always have at least one keyword row
 -- (below) — the app deletes a now-empty group rather than leaving it
@@ -124,7 +126,6 @@ create table afschrift_cat_regel_kolommen (
 	kolom varchar(20) not null
 		check (kolom in ('Naam', 'Tegenrekening', 'Code', 'Af_bij', 'Bedrag_eur',
 		                  'Mutatiesoort', 'Mededeling', 'Saldo_na_mutatie', 'Tag')),
-	combine_mode varchar(3) not null check (combine_mode in ('AND', 'OR')),
 	user_ID integer not null,
 	foreign key (regel_ID) references afschrift_cat_regels(ID) on delete cascade,
 	foreign key (user_ID) references Users(ID),

@@ -116,18 +116,17 @@ aanpassen gebeurt op een eigen pagina, `/categories/regels/{regel_id}/edit`
 (`app/routes/categories.py::edit_regel_page`/`save_regel`, template
 `regel_edit.html`), bereikbaar via de "Aanpassen"-knop op elke regelkaart.
 Die pagina toont alle negen kolommen tegelijk (niet alleen de kolommen
-die de regel al heeft), vooringevuld met de huidige keywords/combine_mode
-waar van toepassing, en slaat op als **volledige vervanging**: alle
+die de regel al heeft), vooringevuld met de huidige keywords waar van
+toepassing, en slaat op als **volledige vervanging**: alle
 kolom-voorwaarden van de regel worden verwijderd en opnieuw aangemaakt
 uit wat er is ingediend, in één transactie
 (`remove_regel_kolommen_for_regel.sql` gevolgd door dezelfde
 insert-queries als het aanmaken van een nieuwe regel) — pas nadat de
 inzending gevalideerd is, dus een mislukte validatie raakt de bestaande
-regel niet aan. Zo kan een kolom worden toegevoegd, gewijzigd (inclusief
-de EN/OF-modus) of helemaal leeggemaakt (= verwijderd uit de regel) door
-gewoon de tekst in dat kolomveld aan te passen — hetzelfde
-multi-keyword-per-veld-gedrag als bij het aanmaken van een nieuwe regel
-(zie Fase 2 hieronder).
+regel niet aan. Zo kan een kolom worden toegevoegd, gewijzigd of helemaal
+leeggemaakt (= verwijderd uit de regel) door gewoon de tekst in dat
+kolomveld aan te passen — hetzelfde multi-keyword-per-veld-gedrag als bij
+het aanmaken van een nieuwe regel (zie Fase 2 hieronder).
 
 ## Waarom SQL-first
 
@@ -316,11 +315,13 @@ die een regel wél heeft moeten matchen wil de regel zelf matchen (EN over
 de kolommen van een regel).
 
 Elke kolom-voorwaarde heeft één of meer keywords/waarden
-(`afschrift_cat_regel_keywords`) plus een eigen `combine_mode`: `'OR'`
-matcht als één van de keywords voorkomt, `'AND'` vereist dat ze allemaal
-tegelijk voorkomen. Bijv. categorie "Inkomsten" met één regel — Naam
-"Baan", Af/Bij "Bij", Mutatiesoort "Mutatieoverschrijving", Mededeling
-"Salaris" — matcht alleen als alle vier tegelijk kloppen.
+(`afschrift_cat_regel_keywords`), die altijd allemaal tegelijk moeten
+voorkomen (EN over de keywords van een kolom — er was hier ooit ook een
+OF-optie, maar die is verwijderd: "één van deze" hoort thuis als aparte
+regel, niet als keuze binnen één kolom). Bijv. categorie "Inkomsten" met
+één regel — Naam "Baan", Af/Bij "Bij", Mutatiesoort
+"Mutatieoverschrijving", Mededeling "Salaris" — matcht alleen als alle
+vier tegelijk kloppen.
 
 Matching hangt af van het kolomtype:
 

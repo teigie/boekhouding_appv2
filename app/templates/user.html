@@ -158,7 +158,7 @@
               </div>
               {% for kolom in regel.kolommen %}
                 <div style="margin-top: 0.5rem;">
-                  <span class="muted">{{ kolom.kolom }} ({{ "moet allemaal voorkomen" if kolom.combine_mode == "AND" else "één van deze" }}):</span>
+                  <span class="muted">{{ kolom.kolom }}{{ " (moet allemaal voorkomen)" if kolom.keywords|length > 1 }}:</span>
                   <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.35rem;">
                     {% for kw in kolom.keywords %}
                       <span class="chip">{{ kw.keyword }}</span>
@@ -176,11 +176,15 @@
           <summary>Nieuwe regel toevoegen</summary>
           <form method="post" action="/categories/{{ c['ID'] }}/regels" style="margin-top: 0.75rem;">
             <p class="muted">
-              Vul minstens één kolom in. Meerdere keywords: één per regel,
-              of gescheiden door een komma — behalve bij Bedrag en Saldo
-              na mutatie, waar een komma het decimaalteken is: daar telt
-              elke regel als één bedrag (bijv. "1.234,56" op de eerste
-              regel, "99,95" op de tweede).
+              Vul minstens één kolom in. Meerdere keywords in één kolom
+              moeten allemaal voorkomen (EN) — wil je "één van deze",
+              maak dan een aparte regel per keyword; een categorie matcht
+              al zodra één van haar regels matcht. Meerdere keywords: één
+              per regel, of gescheiden door een komma — behalve bij
+              Bedrag en Saldo na mutatie, waar een komma het
+              decimaalteken is: daar telt elke regel als één bedrag
+              (bijv. "1.234,56" op de eerste regel, "99,95" op de
+              tweede).
             </p>
             <label>Subcategorie (optioneel)<br>
               <select
@@ -207,12 +211,6 @@
                 <div>
                   <label>{{ kolom.label }}<br>
                     <textarea name="{{ kolom.name }}_keywords" rows="2" placeholder="{{ kolom.placeholder }}"></textarea>
-                  </label>
-                  <label class="muted">Combineren met<br>
-                    <select name="{{ kolom.name }}_mode">
-                      <option value="OR">OF — matcht als één van de keywords voorkomt</option>
-                      <option value="AND" selected>EN — moet allemaal voorkomen</option>
-                    </select>
                   </label>
                 </div>
               {% endfor %}
