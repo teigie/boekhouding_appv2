@@ -33,10 +33,29 @@ create table Rekening (
 -- each user builds and owns their own list, independent of everyone
 -- else's. Name's case-insensitive collation makes the (user_ID, Name)
 -- uniqueness constraint itself case-insensitive, matching the app-level
--- "reuse this name" check in /review.
+-- "reuse this name" check in /review. description is a free-form,
+-- always-optional note on what the category is for — purely a text
+-- field for the user's own reference, never read by matching/filtering
+-- logic anywhere.
+--
+-- Type is a super-classification one level above the category itself:
+-- every category is either an 'Inkomsten' (income) or 'Uitgaven'
+-- (expense) category — unrelated to the dashboard's own
+-- Inkomsten/Uitgaven totals, which are computed per-transaction from
+-- Af_bij, not from this. Deliberately NOT NULL — every category must
+-- have one, no "unclassified" limbo state. The app has no UI to choose
+-- this at creation time yet (see CHANGELOG), so it defaults to
+-- 'Uitgaven' (the more common case) and the user corrects any that are
+-- actually 'Inkomsten' afterward via a dedicated endpoint — the DEFAULT
+-- exists precisely so that silent fallback never has to fail instead.
+-- Not stored on afschrift_subcategorien at all: a subcategory always
+-- inherits its parent category's Type by extension (via cat_ID), rather
+-- than carrying its own possibly-contradicting value.
 create table afschrift_categorien (
 	ID integer primary key autoincrement,
 	Name varchar(30) not null collate nocase,
+	description varchar(500),
+	Type varchar(10) not null default 'Uitgaven' check (Type in ('Inkomsten', 'Uitgaven')),
 	user_ID integer not null,
 	foreign key (user_ID) references Users(ID),
 	unique (user_ID, Name)
@@ -63,10 +82,12 @@ create table afschrift_categorie_suggesties (
 -- pattern as afschrift_cat_regel_kolommen.regel_ID/user_ID below. Always
 -- optional everywhere it's used (on a regel, on a temp_afschrift/
 -- afschrift row) — "no subcategory" is a normal, expected state, never
--- an error.
+-- an error. description, like afschrift_categorien's own, is a
+-- free-form, always-optional note for the user's own reference.
 create table afschrift_subcategorien (
 	ID integer primary key autoincrement,
 	Name varchar(30) not null collate nocase,
+	description varchar(500),
 	cat_ID integer not null,
 	user_ID integer not null,
 	foreign key (cat_ID) references afschrift_categorien(ID) on delete cascade,

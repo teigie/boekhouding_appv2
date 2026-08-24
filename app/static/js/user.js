@@ -21,4 +21,23 @@
       }
     });
   });
+
+  // Inhoudsopgave: each category with subcategories gets its own
+  // dedicated expand/collapse button, separate from the category's own
+  // navigation chip — clicking the category name just jumps to it,
+  // clicking this button only reveals/hides its subcategory chips right
+  // there in the Inhoudsopgave (see app/templates/user.html). aria-
+  // expanded drives the arrow's rotation via CSS (app/static/css/
+  // style.css's .toc-expand-btn[aria-expanded="true"]).
+  document.querySelectorAll(".toc-expand-btn").forEach(function (button) {
+    var target = document.getElementById(button.dataset.target);
+    if (!target) {
+      return;
+    }
+    button.addEventListener("click", function () {
+      var expanded = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", String(!expanded));
+      target.style.display = expanded ? "none" : "flex";
+    });
+  });
 })();

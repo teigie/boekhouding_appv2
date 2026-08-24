@@ -9,6 +9,7 @@ re-verifies ownership of any ID coming from a URL/form before acting on
 it, the same way app/routes/review.py does for Rekening.
 """
 import sqlite3
+from typing import Optional
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
@@ -20,6 +21,7 @@ from app.categorization_rules import (
     normalize_keyword,
     split_keywords,
 )
+from app.category_types import DEFAULT_CATEGORY_TYPE, clean_category_type
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
@@ -45,6 +47,12 @@ _LIST_KOLOMMEN_FOR_REGEL_SQL = (
 
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
 _REMOVE_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "remove_category.sql").read_text(encoding="utf-8")
+_SET_CATEGORY_DESCRIPTION_SQL = (
+    SQL_DIR / "queries" / "reference_data" / "set_category_description.sql"
+).read_text(encoding="utf-8")
+_SET_CATEGORY_TYPE_SQL = (SQL_DIR / "queries" / "reference_data" / "set_category_type.sql").read_text(
+    encoding="utf-8"
+)
 _ADD_REGEL_SQL = (SQL_DIR / "queries" / "reference_data" / "add_regel.sql").read_text(encoding="utf-8")
 _REMOVE_REGEL_SQL = (SQL_DIR / "queries" / "reference_data" / "remove_regel.sql").read_text(encoding="utf-8")
 _ADD_REGEL_KOLOM_SQL = (SQL_DIR / "queries" / "reference_data" / "add_regel_kolom.sql").read_text(encoding="utf-8")
@@ -74,6 +82,19 @@ _ADD_SUBCATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_subcategor
 _REMOVE_SUBCATEGORY_SQL = (
     SQL_DIR / "queries" / "reference_data" / "remove_subcategory.sql"
 ).read_text(encoding="utf-8")
+_SET_SUBCATEGORY_DESCRIPTION_SQL = (
+    SQL_DIR / "queries" / "reference_data" / "set_subcategory_description.sql"
+).read_text(encoding="utf-8")
+
+
+def _clean_description(raw: str) -> Optional[str]:
+    """A description is purely a free-form note for the user's own
+    reference, always optional — an empty/whitespace-only submission
+    means "no description" (stored as NULL), not an empty string."""
+    stripped = raw.strip()
+    return stripped if stripped else None
+
+
 
 
 def _current_columns_map(rows) -> dict:
@@ -90,12 +111,18 @@ def _current_columns_map(rows) -> dict:
 
 
 @router.post("/categories")
-def add_category(request: Request, name: str = Form(...)):
+def add_category(request: Request, name: str = Form(...), description: str = Form(""), category_type: str = Form("")):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
 
     name = name.strip()
+    description = _clean_description(description)
+    # The current "Nieuwe categorie" form doesn't collect a Type yet (see
+    # CHANGELOG) — clean_category_type falls through to None for that
+    # empty submission, so this always resolves to a concrete, valid
+    # value either way, satisfying the column's NOT NULL.
+    resolved_type = clean_category_type(category_type) or DEFAULT_CATEGORY_TYPE
     conn = get_connection()
     try:
         error = None
@@ -107,7 +134,10 @@ def add_category(request: Request, name: str = Form(...)):
                 error = f"Categorie '{name}' bestaat al."
             else:
                 try:
-                    conn.execute(_ADD_CATEGORY_SQL, {"name": name, "user_id": user["id"]})
+                    conn.execute(
+                        _ADD_CATEGORY_SQL,
+                        {"name": name, "description": description, "type": resolved_type, "user_id": user["id"]},
+                    )
                     conn.commit()
                 except sqlite3.IntegrityError:
                     conn.rollback()
@@ -124,6 +154,75 @@ def add_category(request: Request, name: str = Form(...)):
             request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
     audit.info("Category '%s' added by user %s", name, user["id"])
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+
+@router.post("/categories/{cat_id}/description")
+def set_category_description(request: Request, cat_id: int, description: str = Form("")):
+    """Sets (or clears) one category's description — a free-form,
+    always-optional note for the user's own reference, never read by
+    matching/filtering logic. No UI wired up to this yet (see
+    CHANGELOG); the route exists so the feature is usable/testable ahead
+    of that."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
+        if category is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+        conn.execute(
+            _SET_CATEGORY_DESCRIPTION_SQL,
+            {"cat_id": cat_id, "description": _clean_description(description), "user_id": user["id"]},
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    audit.info("Description set for category %s by user %s", cat_id, user["id"])
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+
+@router.post("/categories/{cat_id}/type")
+def set_category_type(request: Request, cat_id: int, category_type: str = Form("")):
+    """Sets one category's Type (Inkomsten/Uitgaven super-classification,
+    see sql/schema.sql) — unlike description, this field is NOT NULL and
+    always meant to be a deliberate choice, so an invalid/missing value
+    is rejected with an error rather than silently defaulted or cleared
+    (that could overwrite an already-correct classification). No UI
+    wired up to this yet (see CHANGELOG); the route exists so the
+    feature is usable/testable ahead of that."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    resolved_type = clean_category_type(category_type)
+    conn = get_connection()
+    try:
+        category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
+        if category is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+        error = None
+        if resolved_type is None:
+            error = "Type moet 'Inkomsten' of 'Uitgaven' zijn."
+        else:
+            conn.execute(_SET_CATEGORY_TYPE_SQL, {"cat_id": cat_id, "type": resolved_type, "user_id": user["id"]})
+            conn.commit()
+
+        if error:
+            data = load_user_page_data(conn, user["id"])
+    finally:
+        conn.close()
+
+    if error:
+        log.warning("Failed to set type for category %s, user %s: %s", cat_id, user["id"], error)
+        return templates.TemplateResponse(
+            request, "user.html", {**data, "user": user, "error": error}, status_code=400
+        )
+    audit.info("Type set to '%s' for category %s by user %s", resolved_type, cat_id, user["id"])
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 
@@ -169,7 +268,7 @@ def delete_category(request: Request, cat_id: int):
 
 
 @router.post("/categories/{cat_id}/subcategories")
-def add_subcategory(request: Request, cat_id: int, name: str = Form(...)):
+def add_subcategory(request: Request, cat_id: int, name: str = Form(...), description: str = Form("")):
     """Adds a subcategory under one specific category — subcategories are
     scoped to exactly one category (see sql/schema.sql), so :cat_id comes
     from the URL just like add_regel's does. Same reuse-by-name-or-reject
@@ -180,6 +279,7 @@ def add_subcategory(request: Request, cat_id: int, name: str = Form(...)):
         return user
 
     name = name.strip()
+    description = _clean_description(description)
     conn = get_connection()
     try:
         category = conn.execute(_FIND_CATEGORY_FOR_USER_SQL, {"id": cat_id, "user_id": user["id"]}).fetchone()
@@ -197,7 +297,10 @@ def add_subcategory(request: Request, cat_id: int, name: str = Form(...)):
                 error = f"Subcategorie '{name}' bestaat al bij deze categorie."
             else:
                 try:
-                    conn.execute(_ADD_SUBCATEGORY_SQL, {"name": name, "cat_id": cat_id, "user_id": user["id"]})
+                    conn.execute(
+                        _ADD_SUBCATEGORY_SQL,
+                        {"name": name, "description": description, "cat_id": cat_id, "user_id": user["id"]},
+                    )
                     conn.commit()
                 except sqlite3.IntegrityError:
                     conn.rollback()
@@ -214,6 +317,36 @@ def add_subcategory(request: Request, cat_id: int, name: str = Form(...)):
             request, "user.html", {**data, "user": user, "error": error}, status_code=400
         )
     audit.info("Subcategory '%s' added to category %s by user %s", name, cat_id, user["id"])
+    return RedirectResponse(user_page_url(user["name"]), status_code=303)
+
+
+@router.post("/subcategories/{subcat_id}/description")
+def set_subcategory_description(request: Request, subcat_id: int, description: str = Form("")):
+    """Sets (or clears) one subcategory's description — a free-form,
+    always-optional note for the user's own reference, never read by
+    matching/filtering logic. No UI wired up to this yet (see
+    CHANGELOG); the route exists so the feature is usable/testable ahead
+    of that."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        subcategory = conn.execute(
+            _FIND_SUBCATEGORY_FOR_USER_SQL, {"id": subcat_id, "user_id": user["id"]}
+        ).fetchone()
+        if subcategory is None:
+            return RedirectResponse(user_page_url(user["name"]), status_code=303)
+        conn.execute(
+            _SET_SUBCATEGORY_DESCRIPTION_SQL,
+            {"subcat_id": subcat_id, "description": _clean_description(description), "user_id": user["id"]},
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    audit.info("Description set for subcategory %s by user %s", subcat_id, user["id"])
     return RedirectResponse(user_page_url(user["name"]), status_code=303)
 
 

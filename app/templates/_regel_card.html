@@ -1,0 +1,32 @@
+{# One rule's card — shared by app/templates/user.html's two rule
+   listings under a category: rules with no subcategory (directly under
+   the category) and, separately, each subcategory's own rules (nested
+   underneath it). Included with context, so it relies on the caller
+   having set `regel` (the current rule) and `regel_nummer` (its 1-based
+   position within whichever list it's being rendered from — restarts
+   per listing, that's expected, it's just a display label). Jinja's
+   special `loop` variable doesn't itself propagate into an
+   {% raw %}{% include %}{% endraw %}'d template, unlike a plain `{% set %}` variable,
+   hence capturing it into `regel_nummer` first rather than using
+   `loop.index` directly here. #}
+<div class="card" style="margin-top: 0.75rem; background: var(--bg);">
+  <div class="table-actions" style="justify-content: space-between;">
+    <strong>Regel {{ regel_nummer }}</strong>
+    <span class="table-actions" style="gap: 0.5rem;">
+      <a href="/categories/regels/{{ regel.ID }}/edit" class="chip">Aanpassen</a>
+      <form method="post" action="/categories/regels/{{ regel.ID }}/delete" class="inline-form">
+        <button type="submit" class="link-button">Regel verwijderen</button>
+      </form>
+    </span>
+  </div>
+  {% for kolom in regel.kolommen %}
+    <div style="margin-top: 0.5rem;">
+      <span class="muted">{{ kolom.kolom }}{{ " (moet allemaal voorkomen)" if kolom.keywords|length > 1 }}:</span>
+      <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.35rem;">
+        {% for kw in kolom.keywords %}
+          <span class="chip">{{ kw.keyword }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+</div>

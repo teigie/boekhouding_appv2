@@ -9,7 +9,7 @@
 -- app/templates/index.html).
 -- Params: :user_id
 
-SELECT sc.ID, sc.Name, sc.cat_ID, c.Name AS cat_name
+SELECT sc.ID, sc.Name, sc.description, sc.cat_ID, c.Name AS cat_name
 FROM afschrift_subcategorien sc
 JOIN afschrift_categorien c ON c.ID = sc.cat_ID
 WHERE sc.user_ID = :user_id

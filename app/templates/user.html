@@ -69,14 +69,50 @@
       Matcht er geen of meer dan één, dan vraagt <a href="/review">Controle</a>
       om een handmatige keuze.
     </p>
+    <p class="muted">
+      Elke categorie is zelf óók ingedeeld als "Inkomsten" of "Uitgaven"
+      (zie de Inhoudsopgave hieronder), en kan subcategorieën hebben. Een
+      regel toevoegen vanuit een subcategorie kent die subcategorie
+      automatisch toe, geen dropdown nodig; vanuit de categorie zelf kies
+      je optioneel een subcategorie, of laat je hem leeg.
+    </p>
   </section>
 
   {% if categorieen %}
     <section class="card" style="margin-top: 1.5rem;">
       <h2>Inhoudsopgave</h2>
-      <div class="table-actions" style="flex-wrap: wrap;">
-        {% for c in categorieen %}
-          <a href="#categorie-{{ c['ID'] }}" class="chip">{{ c["Name"] }}</a>
+      <div class="table-actions" style="align-items: flex-start; gap: 2rem; flex-wrap: wrap;">
+        {% for super_type, color_var in [("Inkomsten", "--series-inkomsten"), ("Uitgaven", "--series-uitgaven")] %}
+          {% set cats_of_type = categorieen | selectattr("Type", "equalto", super_type) | list %}
+          {% if cats_of_type %}
+            <div style="flex: 1; min-width: 240px;">
+              <h3 style="margin-top: 0; color: var({{ color_var }});">{{ super_type }}</h3>
+              <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                {% for c in cats_of_type %}
+                  <div>
+                    <div class="table-actions" style="gap: 0.5rem;">
+                      <a href="#categorie-{{ c['ID'] }}" class="chip">{{ c["Name"] }}</a>
+                      {% if c.subcategorieen %}
+                        <button
+                          type="button"
+                          class="chip toc-expand-btn"
+                          data-target="toc-subcats-{{ c['ID'] }}"
+                          aria-expanded="false"
+                        ><span class="toc-expand-arrow">▸</span> subcategorieën</button>
+                      {% endif %}
+                    </div>
+                    {% if c.subcategorieen %}
+                      <div id="toc-subcats-{{ c['ID'] }}" class="table-actions toc-subcats" style="flex-wrap: wrap; margin: 0.5rem 0 0 1.25rem; display: none;">
+                        {% for sc in c.subcategorieen %}
+                          <a href="#subcat-{{ sc['ID'] }}" class="chip">{{ sc["Name"] }}</a>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
         {% endfor %}
       </div>
     </section>
@@ -110,7 +146,7 @@
     {% for c in categorieen %}
       <section class="card review-group" id="categorie-{{ c['ID'] }}">
         <div class="table-actions" style="justify-content: space-between;">
-          <h2>{{ c["Name"] }}</h2>
+          <h2>{{ c["Name"] }} <span class="muted" style="font-size: 0.8rem; font-weight: normal;">({{ c["Type"] }})</span></h2>
           <form method="post" action="/categories/{{ c['ID'] }}/delete" class="inline-form">
             <button type="submit" class="link-button">Categorie verwijderen</button>
           </form>
@@ -118,59 +154,12 @@
 
         {% if c.regels %}
           {% for regel in c.regels %}
-            <div class="card" style="margin-top: 0.75rem; background: var(--bg);">
-              <div class="table-actions" style="justify-content: space-between;">
-                <strong>Regel {{ loop.index }}{{ " → " ~ regel.subcat_name if regel.subcat_name }}</strong>
-                <span class="table-actions" style="gap: 0.5rem;">
-                  <a href="/categories/regels/{{ regel.ID }}/edit" class="chip">Aanpassen</a>
-                  <form method="post" action="/categories/regels/{{ regel.ID }}/delete" class="inline-form">
-                    <button type="submit" class="link-button">Regel verwijderen</button>
-                  </form>
-                </span>
-              </div>
-              {% for kolom in regel.kolommen %}
-                <div style="margin-top: 0.5rem;">
-                  <span class="muted">{{ kolom.kolom }}{{ " (moet allemaal voorkomen)" if kolom.keywords|length > 1 }}:</span>
-                  <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.35rem;">
-                    {% for kw in kolom.keywords %}
-                      <span class="chip">{{ kw.keyword }}</span>
-                    {% endfor %}
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
+            {% set regel_nummer = loop.index %}
+            {% include "_regel_card.html" %}
           {% endfor %}
-        {% else %}
+        {% elif not c.subcategorieen %}
           <p class="muted" style="margin-top: 0.75rem;">Nog geen regels voor deze categorie.</p>
         {% endif %}
-
-        <div class="card" style="margin-top: 0.75rem; background: var(--bg);">
-          <strong>Subcategorieën</strong>
-          <p class="muted" style="margin-top: 0.35rem;">
-            Alleen binnen "{{ c["Name"] }}" te kiezen — bij een regel van
-            deze categorie of op <a href="/review">Controle</a>. Altijd
-            optioneel: een regel of rij zonder subcategorie is een
-            normale, geldige staat.
-          </p>
-          {% if c.subcategorieen %}
-            <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.5rem;">
-              {% for sc in c.subcategorieen %}
-                <span class="chip">
-                  {{ sc["Name"] }}
-                  <form method="post" action="/subcategories/{{ sc['ID'] }}/delete" class="inline-form">
-                    <button type="submit" class="link-button">×</button>
-                  </form>
-                </span>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="muted" style="margin-top: 0.5rem;">Nog geen subcategorieën voor deze categorie.</p>
-          {% endif %}
-          <form method="post" action="/categories/{{ c['ID'] }}/subcategories" style="margin-top: 0.75rem;">
-            <label>Naam<br><input type="text" name="name" required placeholder="bijv. Weekboodschappen"></label>
-            <button type="submit">Subcategorie toevoegen</button>
-          </form>
-        </div>
 
         <details style="margin-top: 1rem;">
           <summary>Nieuwe regel toevoegen</summary>
@@ -218,6 +207,62 @@
             <button type="submit" style="margin-top: 1rem;">Regel toevoegen</button>
           </form>
         </details>
+
+        {% for sc in c.subcategorieen %}
+          <div class="card" id="subcat-{{ sc['ID'] }}" style="margin-top: 1rem; margin-left: 1.5rem; border-left: 3px solid var(--border);">
+            <div class="table-actions" style="justify-content: space-between;">
+              <strong>↳ {{ sc["Name"] }}</strong>
+              <form method="post" action="/subcategories/{{ sc['ID'] }}/delete" class="inline-form">
+                <button type="submit" class="link-button">Subcategorie verwijderen</button>
+              </form>
+            </div>
+
+            {% if sc.regels %}
+              {% for regel in sc.regels %}
+                {% set regel_nummer = loop.index %}
+                {% include "_regel_card.html" %}
+              {% endfor %}
+            {% else %}
+              <p class="muted" style="margin-top: 0.75rem;">Nog geen regels voor deze subcategorie.</p>
+            {% endif %}
+
+            <details style="margin-top: 1rem;">
+              <summary>Nieuwe regel toevoegen (voor {{ sc["Name"] }})</summary>
+              <form method="post" action="/categories/{{ c['ID'] }}/regels" style="margin-top: 0.75rem;">
+                <p class="muted">
+                  Wordt automatisch toegekend aan subcategorie "{{ sc["Name"] }}".
+                  Vul minstens één kolom in. Meerdere keywords in één kolom
+                  moeten allemaal voorkomen (EN) — wil je "één van deze",
+                  maak dan een aparte regel per keyword. Meerdere keywords:
+                  één per regel, of gescheiden door een komma — behalve bij
+                  Bedrag en Saldo na mutatie, waar een komma het
+                  decimaalteken is: daar telt elke regel als één bedrag
+                  (bijv. "1.234,56" op de eerste regel, "99,95" op de
+                  tweede).
+                </p>
+                <input type="hidden" name="subcat_id" value="{{ sc['ID'] }}">
+                <div class="grid" style="margin-top: 0.75rem;">
+                  {% for kolom in regel_kolommen %}
+                    <div>
+                      <label>{{ kolom.label }}<br>
+                        <textarea name="{{ kolom.name }}_keywords" rows="2" placeholder="{{ kolom.placeholder }}"></textarea>
+                      </label>
+                    </div>
+                  {% endfor %}
+                </div>
+                <button type="submit" style="margin-top: 1rem;">Regel toevoegen</button>
+              </form>
+            </details>
+          </div>
+        {% endfor %}
+
+        <div class="card" style="margin-top: 1rem; margin-left: 1.5rem; border-left: 3px solid var(--border);">
+          <strong>+ Nieuwe subcategorie</strong>
+          <form method="post" action="/categories/{{ c['ID'] }}/subcategories" style="margin-top: 0.5rem;">
+            <label>Naam<br><input type="text" name="name" required placeholder="bijv. Weekboodschappen"></label>
+            <button type="submit">Subcategorie toevoegen</button>
+          </form>
+        </div>
       </section>
     {% endfor %}
   {% endif %}

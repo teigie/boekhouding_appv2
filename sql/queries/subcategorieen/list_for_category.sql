@@ -5,4 +5,4 @@
 -- already known and only ITS subcategories should be offered.
 -- Params: :cat_id, :user_id
 
-SELECT ID, Name FROM afschrift_subcategorien WHERE cat_ID = :cat_id AND user_ID = :user_id ORDER BY Name;
+SELECT ID, Name, description FROM afschrift_subcategorien WHERE cat_ID = :cat_id AND user_ID = :user_id ORDER BY Name;

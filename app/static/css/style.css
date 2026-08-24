@@ -410,6 +410,19 @@ summary {
   color: var(--accent);
 }
 
+.toc-expand-btn {
+  cursor: pointer;
+}
+
+.toc-expand-arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.toc-expand-btn[aria-expanded="true"] .toc-expand-arrow {
+  transform: rotate(90deg);
+}
+
 .link-button {
   background: none;
   color: var(--muted);
@@ -433,7 +446,8 @@ summary {
 }
 
 .preset-btn,
-.checkbox-toggle-btn {
+.checkbox-toggle-btn,
+.toc-expand-btn {
   font: inherit;
 }
 

@@ -48,7 +48,9 @@ def resolve_or_create_subcategory(conn, user_id: int, cat_id: int, subcat_id_raw
         ).fetchone()
         if existing:
             return existing["ID"]
-        cursor = conn.execute(_ADD_SUBCATEGORY_SQL, {"name": name, "cat_id": cat_id, "user_id": user_id})
+        cursor = conn.execute(
+            _ADD_SUBCATEGORY_SQL, {"name": name, "description": None, "cat_id": cat_id, "user_id": user_id}
+        )
         log.info("New subcategory '%s' added inline under category %s for user %s", name, cat_id, user_id)
         return cursor.lastrowid
     if not subcat_id_raw:

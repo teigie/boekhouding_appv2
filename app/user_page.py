@@ -92,17 +92,44 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
     regels_by_cat = _group_regels_by_category(regel_rows)
 
-    categorieen_out = [
-        {
-            "ID": c["ID"],
-            "Name": c["Name"],
-            "regels": regels_by_cat.get(c["ID"], []),
-            "subcategorieen": conn.execute(
-                _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": c["ID"], "user_id": user_id}
-            ).fetchall(),
-        }
-        for c in categorieen
-    ]
+    categorieen_out = []
+    for c in categorieen:
+        all_regels = regels_by_cat.get(c["ID"], [])
+        # Rules order by main category (this loop) and then by
+        # subcategory: a rule with no subcategory stays directly under
+        # the category itself ("regels" below); a rule that has one is
+        # nested under that subcategory instead ("regels" on each entry
+        # in "subcategorieen"). Adding a rule from a subcategory's own
+        # "Nieuwe regel toevoegen" form assigns it there automatically
+        # (a hidden subcat_id field, no dropdown); the category-level
+        # form's dropdown is how a rule gets NO subcategory, or one
+        # picked/typed explicitly (see app/templates/user.html).
+        regels_by_subcat: dict = {}
+        for r in all_regels:
+            if r["subcat_ID"] is not None:
+                regels_by_subcat.setdefault(r["subcat_ID"], []).append(r)
+
+        subcategorieen_rows = conn.execute(
+            _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": c["ID"], "user_id": user_id}
+        ).fetchall()
+        categorieen_out.append(
+            {
+                "ID": c["ID"],
+                "Name": c["Name"],
+                "description": c["description"],
+                "Type": c["Type"],
+                "regels": [r for r in all_regels if r["subcat_ID"] is None],
+                "subcategorieen": [
+                    {
+                        "ID": sc["ID"],
+                        "Name": sc["Name"],
+                        "description": sc["description"],
+                        "regels": regels_by_subcat.get(sc["ID"], []),
+                    }
+                    for sc in subcategorieen_rows
+                ],
+            }
+        )
 
     owned_names = {c["Name"].casefold() for c in categorieen}
     suggesties = [s for s in suggesties if s["Name"].casefold() not in owned_names]

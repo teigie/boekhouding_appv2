@@ -3,4 +3,4 @@
 -- Mirrors sql/queries/rekeningen/find_by_id_for_user.sql.
 -- Params: :id, :user_id
 
-SELECT ID, Name FROM afschrift_categorien WHERE ID = :id AND user_ID = :user_id;
+SELECT ID, Name, description, Type FROM afschrift_categorien WHERE ID = :id AND user_ID = :user_id;

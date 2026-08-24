@@ -11,6 +11,189 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.0.45] - 2026-08-24 — Inhoudsopgave: apart uitklap-knopje per categorie
+
+- **Wijziging** (vervolg op 0.0.44): een categorie met subcategorieën in
+  de Inhoudsopgave had zijn naam-link zélf als uitklap-trigger
+  (`<summary>` er omheen) — dat kon de indruk wekken dat uitklappen niet
+  (meer) mogelijk was, en koppelde "ga naar deze categorie" en "toon haar
+  subcategorieën" aan dezelfde klik. Nu is dat een apart knopje
+  (`▸ subcategorieën`) naast de naam-chip: de naam-link navigeert alleen,
+  het knopje toont/verbergt alleen de subcategorie-chips eronder.
+- Klein stukje nieuwe JS in `app/static/js/user.js`
+  (`.toc-expand-btn`-handlers, geen library) — toggelt `aria-expanded` en
+  de zichtbaarheid van het bijbehorende blokje; de pijl draait via CSS op
+  basis van `aria-expanded` (`app/static/css/style.css`). Standaard
+  dichtgeklapt.
+- **Geverifieerd** op de live app (aparte poort): HTML bevat de losse
+  naam-chip + knop + verborgen subcategorie-blok (`display: none`) per
+  categorie met subcategorieën, JS/CSS worden correct uitgeleverd,
+  dashboard onaangetast.
+
+## [0.0.44] - 2026-08-24 — Inhoudsopgave: Uitgaven naast Inkomsten, links als chips
+
+- **Wijziging** (vervolg op 0.0.43): de Inhoudsopgave-secties Inkomsten
+  en Uitgaven staan nu naast elkaar in twee kolommen (Uitgaven rechts van
+  Inkomsten) in plaats van onder elkaar — `.table-actions`
+  (`display: flex`, al bestaande klasse) met elke kolom op `flex: 1`.
+  Valt terug op gestapeld op een smal scherm (`flex-wrap: wrap`, zelfde
+  patroon als elders op de pagina).
+- Elke categorie-/subcategorie-link is nu een `.chip` (dezelfde
+  pil-vormige knop-stijl die al overal in de app gebruikt wordt, bijv.
+  voor keyword-chips en suggestie-knoppen) in plaats van een kale
+  tekstlink.
+- **Geverifieerd** op de live app (aparte poort): Inkomsten-kolom
+  rendert links, Uitgaven rechts (bevestigd in de ruwe HTML-volgorde
+  binnen de flex-container), elke link is een chip, uit-/inklappen van
+  een categorie met subcategorieën werkt nog steeds, dashboard
+  onaangetast.
+
+## [0.0.43] - 2026-08-24 — Profielpagina: Inhoudsopgave per Inkomsten/Uitgaven, regels genest onder subcategorie
+
+- **Wijziging**: eerste UI-fase voor de nieuwe categorie-structuur
+  (Type, subcategorieën) — de profielpagina zelf, verdere pagina's
+  volgen later.
+- De **Inhoudsopgave** is gesplitst in twee groepen, "Inkomsten" en
+  "Uitgaven" (op basis van elke categorie's `Type`). Een categorie met
+  subcategorieën is uitklapbaar (`<details>`) en toont die subcategorieën
+  ingesprongen eronder; categorie én subcategorie blijven allebei een
+  link naar hun eigen plek op de pagina — subcategorieën hebben daarvoor
+  nu een eigen anker (`id="subcat-{ID}"`).
+- Binnen een categoriekaart staan **regels nu gegroepeerd op
+  subcategorie**: regels zonder subcategorie blijven direct onder de
+  categorie (zoals nu), en elke subcategorie krijgt haar eigen genest
+  blokje met alleen haar eigen regels. De vlakke "Subcategorieën"-chips
+  zijn vervangen door deze geneste blokjes (mét het bestaande
+  verwijderknopje) — subcategorie-informatie stond eerst op twee
+  plekken op de pagina, dat is nu één plek.
+- Een regel toevoegen **vanuit een subcategorie's eigen formulier** kent
+  die subcategorie automatisch toe (verborgen `subcat_id`-veld, geen
+  dropdown) — vanuit de categorie zelf kies je nog steeds optioneel een
+  subcategorie via de dropdown, of laat je hem leeg. Geen backend-
+  wijziging nodig: `add_regel`/`resolve_or_create_subcategory`
+  valideerden al dat een opgegeven subcat_id bij de juiste categorie
+  hoort (zie 0.0.39/0.0.41).
+- Nieuwe gedeelde partial `app/templates/_regel_card.html` — één
+  regelkaart-template voor beide plekken (geen subcategorie / onder een
+  subcategorie) in plaats van gedupliceerde markup. Jinja's `loop`
+  propageert niet vanzelf in een `{% include %}`, dus `loop.index` wordt
+  eerst expliciet naar een `regel_nummer`-variabele gezet.
+- `app/user_page.py::load_user_page_data` groepeert regels nu per
+  (categorie, subcategorie) in Python in plaats van als platte lijst,
+  en geeft elke subcategorie haar eigen `regels`-lijst mee.
+- **Geverifieerd** op de live app (aparte poort): Inhoudsopgave toont de
+  juiste twee groepen met werkende uit-/inklap en ankers, regels staan
+  onder de juiste subcategorie, een regel toevoegen via een
+  subcategorie-formulier kent hem automatisch toe (bevestigd in de
+  database), foutpaden (dubbele categorienaam, ongeldig bedrag) renderen
+  nog steeds correct met de nieuwe geneste datastructuur, dashboard/
+  review/regel-bewerkpagina onaangetast. Testdata na de check
+  opgeruimd.
+
+## [0.0.42] - 2026-08-24 — "Interne overboeking" gesplitst in inkomend/uitgaand (TestReinald)
+
+- **Eenmalige data-reorganisatie**, geen schemawijziging: de categorie
+  "Interne overboeking" (gebruiker TestReinald) is op verzoek gesplitst
+  in twee — "Interne overboeking - inkomend" (Type 'Inkomsten') en
+  "Interne overboeking - uitgaand" (Type 'Uitgaven') — want een interne
+  overboeking is feitelijk twee verschillende dingen afhankelijk van de
+  richting, niet één. Richting komt van `Af_bij` ('Bij'/'Af') —
+  `Bedrag_eur` zelf is altijd unsigned opgeslagen (zie `sql/schema.sql`),
+  dus "positief"/"negatief" zoals gevraagd komt neer op `Af_bij` =
+  'Bij'/'Af'.
+- Elke regel onder de oude categorie is gekloond naar twee regels (één
+  per nieuwe categorie), met dezelfde kolom-voorwaarden plus een nieuwe
+  Af_bij-voorwaarde ('Bij' resp. 'Af') — zelfde EN-over-kolommen-model
+  als elke andere regel. De 50 al gemigreerde `afschrift`-rijen zijn
+  herwezen naar de bijpassende nieuwe categorie op basis van hun eigen
+  Af_bij (17 → inkomend, 33 → uitgaand); de oude regels en categorie zijn
+  daarna verwijderd.
+- `scripts/split_interne_overboeking.py` (eenmalig, met automatische
+  backup, `--user-id` verplicht) — weigert als de oude categorie al een
+  eigen subcategorie of een regel met een eigen Af_bij-voorwaarde heeft,
+  in plaats van te gokken hoe die moeten worden samengevoegd.
+- **Geverifieerd** eerst op een geïsoleerde scratch-kopie: nieuwe
+  regels bevatten precies de verwachte kolom/keyword-combinatie, de
+  Af_bij van elke herwezen `afschrift`-rij komt overeen met de naam van
+  zijn nieuwe categorie (0 mismatches), 0 FK violations, oude
+  regels/categorie weg. Daarna hetzelfde resultaat bevestigd op de live
+  database.
+
+## [0.0.41] - 2026-08-24 — Categorie-superclassificatie Inkomsten/Uitgaven (backend only, nog geen UI)
+
+- **Nieuw**: elke categorie krijgt een `Type`: 'Inkomsten' of 'Uitgaven'
+  — een super-classificatie één niveau boven de categorie zelf, los van
+  de bestaande Inkomsten/Uitgaven-totalen op het dashboard (die worden
+  per transactie berekend uit Af_bij, dit is een keuze op de categorie
+  zelf). Subcategorieën krijgen geen eigen waarde — ze erven die van hun
+  categorie via cat_ID (zelfde "by extension"-redenering als de
+  categorie-scoping in 0.0.39).
+- Nieuwe kolom `afschrift_categorien.Type`, bewust **NOT NULL** (geen
+  "nog niet ingedeeld"-status) met `default 'Uitgaven'` — er is nog geen
+  UI om dit bij het aanmaken te kiezen, dus een nieuwe categorie via het
+  huidige kale "Nieuwe categorie"-formulier krijgt stilzwijgend
+  'Uitgaven' en wordt later handmatig gecorrigeerd waar nodig
+  (`sql/schema.sql`).
+- Nieuwe gedeelde module `app/category_types.py` (`CATEGORY_TYPES`,
+  `DEFAULT_CATEGORY_TYPE`, `clean_category_type`) — gebruikt door zowel
+  `app/routes/categories.py` als `app/routes/review.py`'s "+ nieuwe
+  categorie…"-flow, zelfde rolverdeling als `app/subcategories.py` voor
+  subcategorieën.
+- Nieuwe route `POST /categories/{cat_id}/type`
+  (`sql/queries/reference_data/set_category_type.sql`) zet een
+  bestaande categorie's Type. Anders dan `description`: een ongeldige/
+  lege waarde wordt hier **geweigerd** met een foutmelding in plaats van
+  stilzwijgend op 'Uitgaven' gezet — dat zou per ongeluk een al-juiste
+  indeling kunnen overschrijven.
+- **Migratie**: `scripts/migrate_add_category_type.py` (eenmalig, met
+  automatische backup) — pure `ALTER TABLE ADD COLUMN` met NOT NULL +
+  DEFAULT, geen tabel-rebuild nodig. Print bij het draaien de volledige
+  lijst categorieën (per gebruiker) zodat je weet wat je nog moet
+  nalopen; alle 29 bestaande categorieën startten als 'Uitgaven'.
+  Categorie "Inkomsten" (ID 29, gebruiker TestReinald) is meteen
+  omgezet naar Type 'Inkomsten' — de enige voor de hand liggende.
+- **Geverifieerd** op de live app (aparte poort): Type zetten, een
+  ongeldige waarde geweigerd (bestaande waarde blijft ongemoeid), nieuwe
+  categorie krijgt stilzwijgend 'Uitgaven', cross-user poging genegeerd,
+  CHECK-constraint weigert een bogus waarde rechtstreeks op de database,
+  profiel-/dashboard-/review-pagina's renderen foutloos. Testdata na de
+  check weer opgeruimd.
+
+## [0.0.40] - 2026-08-24 — Beschrijving bij categorie/subcategorie (backend only, nog geen UI)
+
+- **Nieuw**: categorieën en subcategorieën kunnen nu een vrije,
+  optionele `description` hebben — puur een tekstveld voor eigen
+  aantekeningen, nergens gebruikt door matching/filtering. Nieuwe
+  nullable kolom op `afschrift_categorien`/`afschrift_subcategorien`
+  (`sql/schema.sql`).
+- Backend/queries zijn klaar: `POST /categories` en
+  `POST /categories/{cat_id}/subcategories` accepteren een optioneel
+  `description`-formveld bij aanmaken; twee nieuwe routes,
+  `POST /categories/{cat_id}/description` en
+  `POST /subcategories/{subcat_id}/description`, zetten (of wissen, bij
+  een leeg/whitespace-only veld) de beschrijving van een bestaande
+  (sub)categorie. Alle vier scoped op user-ownership, zelfde patroon als
+  de rest van `app/routes/categories.py`.
+- **Nog geen UI** — op eigen verzoek even niet meegenomen, de
+  frontend-kant volgt later.
+- **Migratie**: `scripts/migrate_add_category_descriptions.py`
+  (eenmalig, met automatische backup) — puur additief, een nullable
+  kolom erbij, bestaande rijen worden allemaal `NULL` (geen migratie
+  nodig, geen tabel-rebuild).
+- **Bijvangst**: tijdens het testen van deze wijziging kwamen twee
+  wees-rijen in `afschrift_cat_regel_kolommen` aan het licht (ID's 134,
+  135) — restanten van testregels die in de vorige werksessie
+  (0.0.39-migratie) handmatig via een raw sqlite3-`DELETE` zonder
+  `PRAGMA foreign_keys = ON` waren opgeruimd, waardoor de
+  `ON DELETE CASCADE` niet vuurde. Rechtgezet op de live database (met
+  backup); `PRAGMA foreign_key_check` geeft nu weer 0 violations.
+- **Geverifieerd** op de live app (aparte poort): categorie/subcategorie
+  aanmaken met beschrijving, beschrijving van een bestaande
+  (sub)categorie zetten en wissen (leeg + whitespace-only → NULL),
+  cross-user poging genegeerd (geen wijziging, gewoon een redirect), en
+  profiel-/dashboard-/review-pagina's renderen nog steeds foutloos met de
+  nieuwe kolom erbij. Testdata na de check weer opgeruimd.
+
 ## [0.0.39] - 2026-08-24 — Subcategorieën horen nu bij één categorie
 
 - **Wijziging**: subcategorieën waren tot nu toe één gedeelde lijst per

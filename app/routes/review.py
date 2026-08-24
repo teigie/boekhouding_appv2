@@ -32,6 +32,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.categorization import recategorize_pending
+from app.category_types import DEFAULT_CATEGORY_TYPE
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
@@ -101,7 +102,12 @@ def _resolve_category_id(conn, user_id: int, cat_id_raw: str, new_name_raw: str)
         existing = conn.execute(_FIND_CATEGORY_SQL, {"user_id": user_id, "name": name}).fetchone()
         if existing:
             return existing["ID"]
-        cursor = conn.execute(_ADD_CATEGORY_SQL, {"name": name, "user_id": user_id})
+        # No Type field on /review's inline "+ nieuwe categorie…" flow
+        # either — same fallback as app/routes/categories.py::add_category
+        # (the column is NOT NULL, see sql/schema.sql).
+        cursor = conn.execute(
+            _ADD_CATEGORY_SQL, {"name": name, "description": None, "type": DEFAULT_CATEGORY_TYPE, "user_id": user_id}
+        )
         log.info("New category '%s' added via /review for user %s", name, user_id)
         return cursor.lastrowid
     if not cat_id_raw:

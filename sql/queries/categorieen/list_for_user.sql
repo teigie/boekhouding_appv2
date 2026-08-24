@@ -2,4 +2,4 @@
 -- and /categories.
 -- Params: :user_id
 
-SELECT ID, Name FROM afschrift_categorien WHERE user_ID = :user_id ORDER BY Name;
+SELECT ID, Name, description, Type FROM afschrift_categorien WHERE user_ID = :user_id ORDER BY Name;

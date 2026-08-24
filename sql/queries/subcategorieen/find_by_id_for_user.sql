@@ -4,4 +4,4 @@
 -- Includes cat_ID so the caller (delete_subcategory) knows which
 -- category it belonged to. Params: :id, :user_id
 
-SELECT ID, Name, cat_ID FROM afschrift_subcategorien WHERE ID = :id AND user_ID = :user_id;
+SELECT ID, Name, description, cat_ID FROM afschrift_subcategorien WHERE ID = :id AND user_ID = :user_id;
