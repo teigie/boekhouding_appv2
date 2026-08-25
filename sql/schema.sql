@@ -61,15 +61,6 @@ create table afschrift_categorien (
 	unique (user_ID, Name)
 );
 
--- Global, NOT user-scoped: a fixed list of category names offered as
--- one-click "suggestion" chips on /categories for new/empty users. Never
--- inserted into any user's afschrift_categorien automatically, and never
--- joined into categorization matching — purely a UI template list.
-create table afschrift_categorie_suggesties (
-	ID integer primary key autoincrement,
-	Name varchar(30) not null unique
-);
-
 -- Subcategories: scoped to exactly one parent category — a subcategory
 -- only exists, and is only ever selectable, under its own cat_ID (this
 -- used to be one shared per-user list instead; changed on request, see

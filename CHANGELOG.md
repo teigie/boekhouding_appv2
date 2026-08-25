@@ -11,6 +11,12 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.0] - 2026-08-25 - Laatste aanpassingen & Export ready
+
+- **Nieuw**: Aanpassingen gedaan in de suggesties zodat die beter is voor nieuwe gebruikers.
+- De app is nu af voor andere gebruikers. Yeey.
+- **Disclaimer**: de app is ontwikkeld voor lokaal gebruik, en niet als een betaalde versie. De maker is niet aansprakelijk voor enige problemen, irritaties of schadestelling. Alle tools en mogelijkheden liggen bij de gebruiker. Als de gebruiker iets sloopt, is het zijn/haar fout. Bij het gebruiken van de app neemt de nieuwe gebruiker alle risico's van dien op zichzelf. De app is ontwikkeld middels Claude, er kunnen dus bugs inzitten.
+
 ## [0.0.57] - 2026-08-24 — Upload: extra controle op datumvolgorde
 
 - **Nieuw**: een vierde upload-controle, `sql/upload/check_date_order.sql`

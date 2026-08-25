@@ -8,6 +8,7 @@ import sqlite3
 from urllib.parse import quote
 
 from app.categorization_rules import REGEL_KOLOMMEN
+from app.category_suggestions import CATEGORY_SUGGESTIONS
 from app.config import SQL_DIR
 
 _LIST_REKENINGEN_SQL = (SQL_DIR / "queries" / "rekeningen" / "list_for_user.sql").read_text(encoding="utf-8")
@@ -18,8 +19,18 @@ _LATEST_ENTRY_SQL = (
     SQL_DIR / "queries" / "rekeningen" / "latest_entry_for_user.sql"
 ).read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
-_LIST_SUGGESTIONS_SQL = (SQL_DIR / "queries" / "categorieen" / "list_suggestions.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
+
+# Flat (Name, Type) pairs for the suggestion chips on /categories — one
+# per top-level category in CATEGORY_SUGGESTIONS, dropping the
+# subcategorieen/description hierarchy that only the onboarding page
+# uses. Built once at import time since CATEGORY_SUGGESTIONS is a fixed
+# constant, not per-request data.
+_SUGGESTION_CHIPS = [
+    {"Name": cat["name"], "Type": group["type"]}
+    for group in CATEGORY_SUGGESTIONS
+    for cat in group["categories"]
+]
 _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL = (
     SQL_DIR / "queries" / "subcategorieen" / "list_for_category.sql"
 ).read_text(encoding="utf-8")
@@ -70,8 +81,9 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     temp_afschrift and afschrift (sql/queries/rekeningen/
     latest_entry_for_user.sql — None if the account has no rows at all
     yet) — plus categories with their categorization rules nested
-    underneath, plus the suggestion chips still worth offering (names the
-    user doesn't already have, case-insensitively)."""
+    underneath, plus the suggestion chips still worth offering (from
+    CATEGORY_SUGGESTIONS, names the user doesn't already have,
+    case-insensitively)."""
     rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user_id}).fetchall()
     rekeningen_out = [
         {
@@ -88,7 +100,6 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
         for r in rekeningen
     ]
     categorieen = conn.execute(_LIST_CATEGORIES_SQL, {"user_id": user_id}).fetchall()
-    suggesties = conn.execute(_LIST_SUGGESTIONS_SQL).fetchall()
     regel_rows = conn.execute(_LIST_REGELS_SQL, {"user_id": user_id}).fetchall()
     regels_by_cat = _group_regels_by_category(regel_rows)
 
@@ -132,7 +143,7 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
         )
 
     owned_names = {c["Name"].casefold() for c in categorieen}
-    suggesties = [s for s in suggesties if s["Name"].casefold() not in owned_names]
+    suggesties = [s for s in _SUGGESTION_CHIPS if s["Name"].casefold() not in owned_names]
 
     return {
         "rekeningen": rekeningen_out,

@@ -166,6 +166,7 @@
         {% for s in suggesties %}
           <form method="post" action="/categories" class="inline-form">
             <input type="hidden" name="name" value="{{ s['Name'] }}">
+            <input type="hidden" name="category_type" value="{{ s['Type'] }}">
             <button type="submit" class="link-button">+ {{ s["Name"] }}</button>
           </form>
         {% endfor %}

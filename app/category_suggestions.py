@@ -6,12 +6,18 @@ start from a sensible, common Dutch personal-finance category tree
 instead of a completely empty list. One all-or-nothing accept/skip
 choice, not picked category-by-category.
 
-Deliberately plain Python data, not a database table — unlike
-afschrift_categorie_suggesties (the flat, name-only list of one-click
-suggestion chips on /categories, see sql/queries/categorieen/
-list_suggestions.sql), this one needs hierarchy (subcategorieën) and a
-Type (Inkomsten/Uitgaven) per top-level category, and is meant to stay a
-fixed, curated list rather than admin-editable data.
+Also the single source for the one-click suggestion chips on
+/categories (app/user_page.py::load_user_page_data) — those used to
+come from their own flat, name-only afschrift_categorie_suggesties
+table, but that duplicated this list and had no Type, so it was dropped
+(see scripts/migrate_drop_category_suggestions.py) in favor of just the
+top-level category names/Types here, filtered to the ones a user
+doesn't already have.
+
+Deliberately plain Python data, not a database table — this needs
+hierarchy (subcategorieën) and a Type (Inkomsten/Uitgaven) per top-level
+category, and is meant to stay a fixed, curated list rather than
+admin-editable data.
 
 A category entry's "description" key is optional — omitted entirely for
 most (see app/routes/onboarding.py's `cat.get("description")`, not
@@ -27,7 +33,6 @@ CATEGORY_SUGGESTIONS = [
             {"name": "Rente", "subcategorieen": []},
             {"name": "Toeslagen", "subcategorieen": ["Zorgtoeslag", "Huurtoeslag"]},
             {"name": "Terug storting derden", "subcategorieen": []},
-            {"name": "Dividend / Aandelen", "subcategorieen": []},
             {"name": "Schenkingen", "subcategorieen": []},
             {"name": "Nalatenschap", "subcategorieen": []},
             {"name": "Interne Overboeking - inkomend", "subcategorieen": []},
@@ -71,7 +76,6 @@ CATEGORY_SUGGESTIONS = [
             {"name": "Hobbies", "subcategorieen": []},
             {"name": "Boetes", "subcategorieen": []},
             {"name": "Cadeaus", "subcategorieen": []},
-            {"name": "Aandelen", "subcategorieen": []},
         ],
     },
 ]
