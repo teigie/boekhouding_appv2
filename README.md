@@ -37,6 +37,19 @@ is.
 
 Vereist Python 3.10+.
 
+**Alleen op Debian/Ubuntu-gebaseerde Linux (bijv. Ubuntu, Mint):** de
+systeem-Python daar bevat de `venv`-module niet standaard — die zit in
+een apart pakket. Zonder dit pakket geeft `python -m venv .venv` hieronder
+een foutmelding dat `ensurepip`/`venv` ontbreekt. Installeer het eenmalig:
+
+```bash
+sudo apt update
+sudo apt install python3-venv
+```
+
+Op andere systemen (Windows, macOS, Fedora, Arch, …) zit `venv` al
+ingebouwd in Python en is deze stap niet nodig.
+
 ```bash
 git clone <this repo>
 cd boekhouding_appv2
