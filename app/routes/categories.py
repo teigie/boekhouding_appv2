@@ -44,6 +44,9 @@ _FIND_REGEL_FOR_USER_SQL = (SQL_DIR / "queries" / "regels" / "find_for_user.sql"
 _LIST_KOLOMMEN_FOR_REGEL_SQL = (
     SQL_DIR / "queries" / "regels" / "list_kolommen_for_regel.sql"
 ).read_text(encoding="utf-8")
+_LIST_MUTATIESOORTEN_SQL = (
+    SQL_DIR / "queries" / "mutatiesoorten" / "list_all.sql"
+).read_text(encoding="utf-8")
 
 _ADD_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "add_category.sql").read_text(encoding="utf-8")
 _REMOVE_CATEGORY_SQL = (SQL_DIR / "queries" / "reference_data" / "remove_category.sql").read_text(encoding="utf-8")
@@ -513,6 +516,7 @@ def edit_regel_page(request: Request, regel_id: int):
         subcategorieen = conn.execute(
             _LIST_SUBCATEGORIES_FOR_CATEGORY_SQL, {"cat_id": regel["cat_ID"], "user_id": user["id"]}
         ).fetchall()
+        mutatiesoorten = [r["Name"] for r in conn.execute(_LIST_MUTATIESOORTEN_SQL).fetchall()]
     finally:
         conn.close()
 
@@ -521,6 +525,7 @@ def edit_regel_page(request: Request, regel_id: int):
         {
             "user": user, "regel": regel, "current": _current_columns_map(rows),
             "regel_kolommen": REGEL_KOLOMMEN, "subcategorieen": subcategorieen,
+            "mutatiesoorten": mutatiesoorten,
             "submitted_subcat_id": str(regel["subcat_ID"]) if regel["subcat_ID"] is not None else "",
             "submitted_new_subcategory_name": "",
         },
@@ -602,11 +607,17 @@ async def save_regel(request: Request, regel_id: int):
 
     if error:
         log.warning("Failed to save rule %s for user %s: %s", regel_id, user["id"], error)
+        conn = get_connection()
+        try:
+            mutatiesoorten = [r["Name"] for r in conn.execute(_LIST_MUTATIESOORTEN_SQL).fetchall()]
+        finally:
+            conn.close()
         return templates.TemplateResponse(
             request, "regel_edit.html",
             {
                 "user": user, "regel": regel, "current": submitted, "regel_kolommen": REGEL_KOLOMMEN,
-                "subcategorieen": subcategorieen, "submitted_subcat_id": submitted_subcat_id,
+                "subcategorieen": subcategorieen, "mutatiesoorten": mutatiesoorten,
+                "submitted_subcat_id": submitted_subcat_id,
                 "submitted_new_subcategory_name": submitted_new_subcategory_name, "error": error,
             },
             status_code=400,

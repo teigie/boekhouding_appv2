@@ -45,9 +45,22 @@
       <div class="grid" style="margin-top: 0.75rem;">
         {% for kolom in regel_kolommen %}
           {% set huidig = current.get(kolom.name, {}) %}
+          {% set huidig_text = huidig.get("keywords_text", "") %}
           <div>
             <label>{{ kolom.label }}<br>
-              <textarea name="{{ kolom.name }}_keywords" rows="3" placeholder="{{ kolom.placeholder }}">{{ huidig.get("keywords_text", "") }}</textarea>
+              {% if kolom.name == "Mutatiesoort" %}
+                <select name="{{ kolom.name }}_keywords">
+                  <option value="" {{ "selected" if not huidig_text }}>— geen filter op mutatiesoort —</option>
+                  {% for m in mutatiesoorten %}
+                    <option value="{{ m }}" {{ "selected" if huidig_text == m }}>{{ m }}</option>
+                  {% endfor %}
+                  {% if huidig_text and huidig_text not in mutatiesoorten %}
+                    <option value="{{ huidig_text }}" selected>{{ huidig_text }} (huidige waarde, niet meer in lijst)</option>
+                  {% endif %}
+                </select>
+              {% else %}
+                <textarea name="{{ kolom.name }}_keywords" rows="3" placeholder="{{ kolom.placeholder }}">{{ huidig_text }}</textarea>
+              {% endif %}
             </label>
           </div>
         {% endfor %}

@@ -20,6 +20,9 @@ _LATEST_ENTRY_SQL = (
 ).read_text(encoding="utf-8")
 _LIST_CATEGORIES_SQL = (SQL_DIR / "queries" / "categorieen" / "list_for_user.sql").read_text(encoding="utf-8")
 _LIST_REGELS_SQL = (SQL_DIR / "queries" / "regels" / "list_for_user.sql").read_text(encoding="utf-8")
+_LIST_MUTATIESOORTEN_SQL = (
+    SQL_DIR / "queries" / "mutatiesoorten" / "list_all.sql"
+).read_text(encoding="utf-8")
 
 # Flat (Name, Type) pairs for the suggestion chips on /categories — one
 # per top-level category in CATEGORY_SUGGESTIONS, dropping the
@@ -83,7 +86,10 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     yet) — plus categories with their categorization rules nested
     underneath, plus the suggestion chips still worth offering (from
     CATEGORY_SUGGESTIONS, names the user doesn't already have,
-    case-insensitively)."""
+    case-insensitively), plus mutatiesoorten — every raw-text Mutatiesoort
+    variant a bank export can produce (sql/queries/mutatiesoorten/
+    list_all.sql), for the "Nieuwe regel toevoegen" form's Mutatiesoort
+    dropdown."""
     rekeningen = conn.execute(_LIST_REKENINGEN_SQL, {"user_id": user_id}).fetchall()
     rekeningen_out = [
         {
@@ -145,9 +151,12 @@ def load_user_page_data(conn: sqlite3.Connection, user_id: int) -> dict:
     owned_names = {c["Name"].casefold() for c in categorieen}
     suggesties = [s for s in _SUGGESTION_CHIPS if s["Name"].casefold() not in owned_names]
 
+    mutatiesoorten = [r["Name"] for r in conn.execute(_LIST_MUTATIESOORTEN_SQL).fetchall()]
+
     return {
         "rekeningen": rekeningen_out,
         "categorieen": categorieen_out,
         "suggesties": suggesties,
         "regel_kolommen": REGEL_KOLOMMEN,
+        "mutatiesoorten": mutatiesoorten,
     }
