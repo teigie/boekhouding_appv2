@@ -21,7 +21,7 @@ from app.categorization_rules import (
     normalize_keyword,
     split_keywords,
 )
-from app.category_types import DEFAULT_CATEGORY_TYPE, clean_category_type
+from app.category_types import clean_category_type
 from app.config import SQL_DIR
 from app.db import get_connection
 from app.logging_config import get_app_logger, get_audit_logger
@@ -118,16 +118,18 @@ def add_category(request: Request, name: str = Form(...), description: str = For
 
     name = name.strip()
     description = _clean_description(description)
-    # The current "Nieuwe categorie" form doesn't collect a Type yet (see
-    # CHANGELOG) — clean_category_type falls through to None for that
-    # empty submission, so this always resolves to a concrete, valid
-    # value either way, satisfying the column's NOT NULL.
-    resolved_type = clean_category_type(category_type) or DEFAULT_CATEGORY_TYPE
+    # The "Nieuwe categorie" form now requires the user to pick a Type
+    # explicitly (Inkomsten/Uitgaven) — same as set_category_type below,
+    # a missing/invalid value is rejected rather than silently defaulted,
+    # since that could file a category under the wrong supercategory.
+    resolved_type = clean_category_type(category_type)
     conn = get_connection()
     try:
         error = None
         if not name:
             error = "Een categorienaam is verplicht."
+        elif resolved_type is None:
+            error = "Type moet 'Inkomsten' of 'Uitgaven' zijn."
         else:
             existing = conn.execute(_FIND_CATEGORY_BY_NAME_SQL, {"user_id": user["id"], "name": name}).fetchone()
             if existing:

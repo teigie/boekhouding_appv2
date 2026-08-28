@@ -157,6 +157,13 @@
     <h2>Nieuwe categorie</h2>
     <form method="post" action="/categories">
       <label>Naam<br><input type="text" name="name" required placeholder="bijv. Boodschappen"></label>
+      <label>Type<br>
+        <select name="category_type" required>
+          <option value="" disabled selected>— kies —</option>
+          <option value="Inkomsten">Inkomsten</option>
+          <option value="Uitgaven">Uitgaven</option>
+        </select>
+      </label>
       <button type="submit">Categorie toevoegen</button>
     </form>
 
