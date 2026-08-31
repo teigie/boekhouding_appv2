@@ -10,7 +10,7 @@ Two modes, both on 127.0.0.1:8000:
   changes. Idle-shutdown (see app/idle_shutdown.py) is inert in this mode
   regardless of BOEKHOUDING_IDLE_TIMEOUT_MINUTES, since --reload runs the
   app in a supervised subprocess this script has no direct handle to.
-- BOEKHOUDING_RELOAD=0 (what start_app.sh/.bat/.ps1 use): a single
+- BOEKHOUDING_RELOAD=0 (what start_app.sh/.bat use): a single
   uvicorn.Server built here directly, stashed on app.state.uvicorn_server
   so the idle-shutdown background task can flip `should_exit` on it and
   have the app close itself down after N idle minutes.
