@@ -113,10 +113,11 @@ Toestaan als programma).
 
 **Windows:**
 
-Dubbelklik `start_app.bat` (dit roept `start_app.ps1` aan — vereist
-PowerShell, standaard aanwezig op Windows 10/11). Verwacht dezelfde
+Dubbelklik `start_app.bat`. Verwacht dezelfde
 `.venv`-map als bij de installatiestappen hierboven, dus met
-`.venv\Scripts\python.exe` erin.
+`.venv\Scripts\python.exe` erin,
+en vereist `curl.exe` (standaard aanwezig sinds Windows 10 1803 /
+Windows 11).
 
 Om een snelkoppeling op het bureaublad te zetten: rechtermuisklik op
 `start_app.bat` → **Verzenden naar** → **Bureaublad (snelkoppeling
