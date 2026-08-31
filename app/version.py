@@ -215,7 +215,7 @@ def apply_update(app: FastAPI) -> None:
         log.info("Update applied in --reload mode; the file watcher will restart the app on its own.")
         return
 
-    # Launcher mode (BOEKHOUDING_RELOAD=0, start_app.sh/.bat/.ps1): once
+    # Launcher mode (BOEKHOUDING_RELOAD=0, start_app.sh/.bat/): once
     # this server exits, nothing brings it back — the launcher script only
     # starts it once, at the initial double-click. So the replacement
     # process has to be spawned here, before asking this one to stop, or
