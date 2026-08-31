@@ -55,7 +55,7 @@ git clone <this repo>
 cd boekhouding_appv2
 
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+source .venv/bin/activate      # Windows: .venv\Scripts\activate.bat
 
 pip install -r requirements.txt
 python run.py
