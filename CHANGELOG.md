@@ -11,6 +11,10 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.1] - 2026-08-31 - Windows button fix
+
+- **Nieuw**: bugfix voor de button, en handmatig opstarten op windows.
+
 ## [0.1.0] - 2026-08-25 - Laatste aanpassingen & Export ready
 
 - **Nieuw**: Aanpassingen gedaan in de suggesties zodat die beter is voor nieuwe gebruikers.
