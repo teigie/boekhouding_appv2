@@ -311,7 +311,16 @@
                   {% for kolom in regel_kolommen %}
                     <div>
                       <label>{{ kolom.label }}<br>
-                        <textarea name="{{ kolom.name }}_keywords" rows="2" placeholder="{{ kolom.placeholder }}"></textarea>
+                        {% if kolom.name == "Mutatiesoort" %}
+                          <select name="{{ kolom.name }}_keywords">
+                            <option value="" selected>— geen filter op mutatiesoort —</option>
+                            {% for m in mutatiesoorten %}
+                              <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                          </select>
+                        {% else %}
+                          <textarea name="{{ kolom.name }}_keywords" rows="2" placeholder="{{ kolom.placeholder }}"></textarea>
+                        {% endif %}
                       </label>
                     </div>
                   {% endfor %}

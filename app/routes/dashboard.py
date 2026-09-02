@@ -15,12 +15,13 @@ see app/dashboard_chart.py's module docstring and
 sql/queries/afschrift/monthly_totals_for_user.sql.
 
 Each row of the "Per categorie" table can be expanded (index.html +
-app/static/js/dashboard.js) to show the individual afschrift rows its
-totals were summed from — a separate, unaggregated query
-(sql/queries/afschrift/list_for_user.sql) over the same date range, run
-through the exact same Rekening/categorie selection filtering as the
-totals themselves, so what's shown underneath always matches what's
-added up above it.
+app/static/js/dashboard.js) to show a nested per-subcategorie totals
+table, and each of those subcategorie rows expands in turn to the
+individual afschrift rows its totals were summed from — a separate,
+unaggregated query (sql/queries/afschrift/list_for_user.sql) over the
+same date range, run through the exact same Rekening/categorie selection
+filtering as the totals themselves, so what's shown underneath always
+matches what's added up above it.
 
 "Exporteren naar CSV" (below the "Per categorie" table) downloads the
 same selection as a standalone CSV — every afschrift column for exactly
@@ -81,9 +82,14 @@ def _cat_key(cat_id) -> str:
 
 
 def _default_month_range(today: date) -> tuple[date, date]:
-    """Last 6 months (incl. the current one) — a single month default
-    would make the linegraph a single dot, which defeats its purpose."""
-    return add_months(today.replace(day=1), -5), today.replace(day=1)
+    """The most recently fully-completed calendar month — not the
+    current, still in-progress one, which would understate that month's
+    real totals every time until it ends. The linegraph degrades
+    gracefully to a single point in this case; "Laatste 6 maanden" (see
+    _build_presets below) is one click away for the multi-month trend
+    view."""
+    previous_month = add_months(today.replace(day=1), -1)
+    return previous_month, previous_month
 
 
 def _resolve_month_range(today: date, start_month: Optional[str], end_month: Optional[str]) -> tuple[date, date]:
@@ -145,7 +151,9 @@ def _export_url(range_start: date, range_end: date, selected_rekening_ids, selec
 
 def _build_presets(today: date, data_bounds: tuple[Optional[str], Optional[str]]) -> list[dict]:
     this_month = today.replace(day=1)
-    last6_start, last6_end = _default_month_range(today)
+    # No longer the page's default (see _default_month_range above) but
+    # still offered as its own preset button.
+    last6_start, last6_end = add_months(this_month, -5), this_month
     year_start, year_end = today.replace(month=1, day=1), today.replace(month=12, day=1)
 
     min_datum, max_datum = data_bounds
@@ -222,25 +230,43 @@ def home(
     totaal_inkomsten = sum(r["totaal_bij"] for r in filtered_rows)
     totaal_uitgaven = sum(r["totaal_af"] for r in filtered_rows)
 
+    # Two levels deep: per_cat[cat_key] holds the category's own totals
+    # plus a nested per_cat[cat_key]["subcategorieen"][subcat_key] dict
+    # with that subcategory's totals — mirrors the category table one
+    # level down, so "Per categorie" expands to a subcategory table, and
+    # each subcategory row expands (below) to its own statements.
+    def _new_cat_entry(key: str, name: str) -> dict:
+        return {"key": key, "category": name, "totaal_bij": 0.0, "totaal_af": 0.0, "subcategorieen": {}}
+
+    def _new_subcat_entry(key: str, name: str) -> dict:
+        return {"key": key, "subcategorie": name, "totaal_bij": 0.0, "totaal_af": 0.0, "statements": []}
+
     per_cat: dict[str, dict] = {}
     for r in filtered_rows:
-        key = _cat_key(r["cat_id"])
-        entry = per_cat.setdefault(
-            key, {"key": key, "category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0, "statements": []}
-        )
-        entry["totaal_bij"] += r["totaal_bij"]
-        entry["totaal_af"] += r["totaal_af"]
+        cat_key = _cat_key(r["cat_id"])
+        cat_entry = per_cat.setdefault(cat_key, _new_cat_entry(cat_key, r["category"]))
+        cat_entry["totaal_bij"] += r["totaal_bij"]
+        cat_entry["totaal_af"] += r["totaal_af"]
+        subcat_key = _cat_key(r["subcat_id"])
+        subcat_entry = cat_entry["subcategorieen"].setdefault(subcat_key, _new_subcat_entry(subcat_key, r["subcategorie"]))
+        subcat_entry["totaal_bij"] += r["totaal_bij"]
+        subcat_entry["totaal_af"] += r["totaal_af"]
     # Statements are gathered from a separate, unaggregated query
     # (list_for_user.sql) — same date-range/Rekening/category filtering
-    # as the totals above, so each category's expanded list on the
+    # as the totals above, so each subcategory's expanded list on the
     # dashboard always matches exactly what its totals were summed from.
     for r in filtered_statements:
-        key = _cat_key(r["cat_id"])
-        entry = per_cat.setdefault(
-            key, {"key": key, "category": r["category"], "totaal_bij": 0.0, "totaal_af": 0.0, "statements": []}
-        )
-        entry["statements"].append(r)
-    categorie_rows = sorted(per_cat.values(), key=lambda e: (-e["totaal_af"], -e["totaal_bij"]))
+        cat_key = _cat_key(r["cat_id"])
+        cat_entry = per_cat.setdefault(cat_key, _new_cat_entry(cat_key, r["category"]))
+        subcat_key = _cat_key(r["subcat_id"])
+        subcat_entry = cat_entry["subcategorieen"].setdefault(subcat_key, _new_subcat_entry(subcat_key, r["subcategorie"]))
+        subcat_entry["statements"].append(r)
+
+    categorie_rows = []
+    for entry in per_cat.values():
+        entry["subcategorieen"] = sorted(entry["subcategorieen"].values(), key=lambda e: (-e["totaal_af"], -e["totaal_bij"]))
+        categorie_rows.append(entry)
+    categorie_rows.sort(key=lambda e: (-e["totaal_af"], -e["totaal_bij"]))
 
     months = month_range(range_start, range_end)
     monthly_values: dict[tuple, float] = {}

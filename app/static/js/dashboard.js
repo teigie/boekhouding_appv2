@@ -54,12 +54,15 @@
     });
   });
 
-  // "Per categorie": elke categorierij is klikbaar (en met Enter/Spatie
-  // bedienbaar, vandaar tabindex + role="button" in index.html) en
-  // toont/verbergt de bijbehorende detailrij met onderliggende
-  // statements — beide rijen zijn al server-side gerenderd, dit
-  // schakelt alleen het `hidden`-attribuut om. Losstaand van de
-  // grafiekcode hieronder, die stopt (return) als er geen grafiek is.
+  // "Per categorie": elke categorie- én subcategorierij is klikbaar (en
+  // met Enter/Spatie bedienbaar, vandaar tabindex + role="button" in
+  // index.html) en toont/verbergt de bijbehorende detailrij — voor een
+  // categorierij is dat een tabel met haar subcategorieën, voor een
+  // subcategorierij de onderliggende statements. Alle rijen zijn al
+  // server-side gerenderd (ook genest, binnenin een nog verborgen
+  // categorie-detailrij), dit schakelt alleen het `hidden`-attribuut om.
+  // Losstaand van de grafiekcode hieronder, die stopt (return) als er
+  // geen grafiek is.
   document.querySelectorAll(".category-row").forEach(function (row) {
     var target = document.getElementById(row.dataset.catTarget);
     if (!target) return;

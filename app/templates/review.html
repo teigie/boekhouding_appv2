@@ -106,17 +106,18 @@
                   {% for row in group.display_rows %}
                     <tr>
                       <td>{{ row["Datum"] | eu_date }}</td>
-                      <td>{{ row["Naam"] }}</td>
+                      <td class="col-wrap-tight">{{ row["Naam"] }}</td>
                       <td class="col-wrap">{{ row["Mededeling"] or "" }}</td>
                       <td class="col-amount {{ 'amount-af' if row['Af_bij'] == 'Af' else 'amount-bij' }}">
                         {{ "−" if row["Af_bij"] == "Af" else "+" }}€ {{ row["Bedrag_eur"]|bedrag_nl }}
                       </td>
-                      <td>{{ row["Mutatiesoort"] }}</td>
+                      <td class="col-wrap-tight">{{ row["Mutatiesoort"] }}</td>
                       <td class="category-cell">
                         <select
                           name="cat_id_{{ row['ID'] }}"
                           class="category-select"
-                          onchange="this.closest('td').querySelector('.category-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+                          title="{{ row['Categorie'] or '' }}"
+                          onchange="this.closest('td').querySelector('.category-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none'; this.title = this.options[this.selectedIndex].text;"
                         >
                           <option value="" disabled {{ "selected" if not row["Categorie"] }}>— kies —</option>
                           {% for cat in categories %}
@@ -136,7 +137,8 @@
                         <select
                           name="subcat_id_{{ row['ID'] }}"
                           class="subcategory-select"
-                          onchange="this.closest('td').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none';"
+                          title="{{ row['Subcategorie'] or '' }}"
+                          onchange="this.closest('td').querySelector('.subcategory-new').style.display = (this.value === '__new__') ? 'inline-block' : 'none'; this.title = this.options[this.selectedIndex].text;"
                         >
                           <option value="" {{ "selected" if not row["Subcategorie_ID"] }}>— geen —</option>
                           {% for sc in subcategories %}

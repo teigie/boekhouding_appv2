@@ -11,6 +11,10 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.2] - 2026-09-02 - Quality of life updates
+
+- **Nieuw**: dashboard tabel is nu onderverdeeld in subcategorien. Datum range default is vorige maand. Controle pagina is nu volledig zichtbaar zonder zijwaards scrollen.
+
 ## [0.1.1] - 2026-08-31 - Windows button fix
 
 - **Nieuw**: bugfix voor de button, en handmatig opstarten op windows.

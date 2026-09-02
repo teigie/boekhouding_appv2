@@ -259,7 +259,7 @@
       <summary><h2 style="display: inline; margin: 0;">Per categorie</h2></summary>
       <div style="margin-top: 0.75rem;">
         {% if categorie_rows %}
-          <p class="muted" style="margin-top: 0;">Klik op een categorie om de onderliggende statements te zien.</p>
+          <p class="muted" style="margin-top: 0;">Klik op een categorie voor de subcategorieën, en op een subcategorie voor de onderliggende statements.</p>
           <div class="table-scroll">
             <table>
               <thead>
@@ -278,29 +278,55 @@
                   </tr>
                   <tr class="category-detail-row" id="cat-statements-{{ c.key }}" hidden>
                     <td colspan="3">
-                      {% if c.statements %}
+                      {% if c.subcategorieen %}
                         <div class="table-scroll">
                           <table class="category-statements">
                             <thead>
                               <tr>
-                                <th>Datum</th>
-                                <th>Rekening</th>
-                                <th>Naam</th>
-                                <th>Mededeling</th>
                                 <th>Subcategorie</th>
-                                <th class="col-amount">Bedrag</th>
+                                <th class="col-amount">Inkomsten</th>
+                                <th class="col-amount">Uitgaven</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {% for s in c.statements %}
-                                <tr>
-                                  <td>{{ s["Datum"] | eu_date }}</td>
-                                  <td>{{ s["rekening_name"] }}</td>
-                                  <td>{{ s["Naam"] }}</td>
-                                  <td class="col-wrap">{{ s["Mededeling"] or "" }}</td>
-                                  <td>{{ s["subcategorie"] }}</td>
-                                  <td class="col-amount {{ 'amount-af' if s['Af_bij'] == 'Af' else 'amount-bij' }}">
-                                    {{ "−" if s["Af_bij"] == "Af" else "+" }}€ {{ s["Bedrag_eur"]|bedrag_nl }}
+                              {% for sc in c.subcategorieen %}
+                                <tr class="category-row subcategory-row" data-cat-target="subcat-statements-{{ c.key }}-{{ sc.key }}" tabindex="0" role="button" aria-expanded="false">
+                                  <td><span class="category-chevron">▸</span> {{ sc["subcategorie"] }}</td>
+                                  <td class="col-amount amount-bij">€ {{ sc["totaal_bij"]|bedrag_nl }}</td>
+                                  <td class="col-amount amount-af">€ {{ sc["totaal_af"]|bedrag_nl }}</td>
+                                </tr>
+                                <tr class="category-detail-row" id="subcat-statements-{{ c.key }}-{{ sc.key }}" hidden>
+                                  <td colspan="3">
+                                    {% if sc.statements %}
+                                      <div class="table-scroll">
+                                        <table class="category-statements">
+                                          <thead>
+                                            <tr>
+                                              <th>Datum</th>
+                                              <th>Rekening</th>
+                                              <th>Naam</th>
+                                              <th>Mededeling</th>
+                                              <th class="col-amount">Bedrag</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {% for s in sc.statements %}
+                                              <tr>
+                                                <td>{{ s["Datum"] | eu_date }}</td>
+                                                <td>{{ s["rekening_name"] }}</td>
+                                                <td>{{ s["Naam"] }}</td>
+                                                <td class="col-wrap">{{ s["Mededeling"] or "" }}</td>
+                                                <td class="col-amount {{ 'amount-af' if s['Af_bij'] == 'Af' else 'amount-bij' }}">
+                                                  {{ "−" if s["Af_bij"] == "Af" else "+" }}€ {{ s["Bedrag_eur"]|bedrag_nl }}
+                                                </td>
+                                              </tr>
+                                            {% endfor %}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    {% else %}
+                                      <p class="muted" style="margin: 0.25rem 0;">Geen statements voor deze subcategorie in deze periode.</p>
+                                    {% endif %}
                                   </td>
                                 </tr>
                               {% endfor %}
@@ -308,7 +334,7 @@
                           </table>
                         </div>
                       {% else %}
-                        <p class="muted" style="margin: 0.25rem 0;">Geen statements voor deze categorie in deze periode.</p>
+                        <p class="muted" style="margin: 0.25rem 0;">Geen subcategorieën voor deze categorie in deze periode.</p>
                       {% endif %}
                     </td>
                   </tr>

@@ -25,13 +25,28 @@ def get_or_create_session_secret() -> str:
     return secret
 
 
+# Regenerated every time this module is imported — which happens exactly
+# once per running server process, at startup. Stamped into the session
+# on log_in() below and checked in current_user(): a browser that still
+# holds a session cookie signed under a PREVIOUS process's boot ID reads
+# as logged out here, so restarting the server always lands back on
+# /login instead of silently resuming as whoever was logged in before —
+# not a security boundary (this app has none, see module docstring),
+# purely so the landing page after a (re)start is always the login page.
+_BOOT_ID = token_hex(16)
+
+
 def current_user(request: Request) -> Optional[dict]:
     """{"id": ..., "name": ..., "previous_login": ...} for the logged-in
     user, or None. previous_login is the last_logged_in value Users held
     BEFORE this session's login overwrote it — i.e. "when you logged in
-    last time", not "now". None if this is the user's first-ever login."""
+    last time", not "now". None if this is the user's first-ever login.
+
+    Also None if the session cookie predates the current server process
+    (see _BOOT_ID above) — even though the signature is still valid, it
+    belongs to a server run that's no longer running."""
     user_id = request.session.get("user_id")
-    if user_id is None:
+    if user_id is None or request.session.get("boot_id") != _BOOT_ID:
         return None
     return {
         "id": user_id,
@@ -60,6 +75,7 @@ def log_in(request: Request, user_id: int, user_name: str, previous_login: Optio
     request.session["user_id"] = user_id
     request.session["user_name"] = user_name
     request.session["previous_login"] = previous_login
+    request.session["boot_id"] = _BOOT_ID
 
 
 def log_out(request: Request) -> None:

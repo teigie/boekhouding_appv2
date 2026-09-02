@@ -10,6 +10,7 @@ from app.formatting import (
     format_datetime_eu,
     format_month_nl,
 )
+from app.session import current_user
 from app.version import get_cached_update_info
 
 templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates")
@@ -24,3 +25,10 @@ templates.env.filters["bedrag_nl_whole"] = format_amount_nl_whole
 # base.html's `update_info()` call must re-read the cache on every
 # render, not capture whatever it was when this module first imported.
 templates.env.globals["update_info"] = get_cached_update_info
+# Templates (base.html's nav, mainly) must check this rather than reading
+# request.session.get("user_id") directly — that raw dict can still hold
+# a previous process's login (see app/session.py's _BOOT_ID) even when
+# current_user() correctly reports logged-out, which would otherwise
+# show a stale "logged in as ..." header on the very /login page that
+# boot-id check just redirected to.
+templates.env.globals["current_user"] = current_user

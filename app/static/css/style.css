@@ -256,9 +256,27 @@ th, td {
   vertical-align: middle;
 }
 
+/* /review's table has more columns fighting for width than any other
+   table in the app (8, two of them <select>s) — a bit less padding
+   buys back horizontal room without hurting readability, so more of it
+   fits without the .table-scroll horizontal scrollbar kicking in. */
+.review-group th,
+.review-group td {
+  padding: 0.4rem 0.5rem;
+}
+
 td.col-wrap {
   white-space: normal;
-  min-width: 160px;
+  min-width: 140px;
+}
+
+/* Same idea as .col-wrap (let long content break onto multiple lines
+   instead of forcing the whole table wider than the viewport) but for
+   columns that are usually short (Naam, Mutatiesoort on /review) and so
+   shouldn't be forced to reserve col-wrap's 160px minimum every time —
+   they wrap only when the table actually needs the room. */
+td.col-wrap-tight {
+  white-space: normal;
 }
 
 th {
@@ -298,6 +316,10 @@ tbody tr:hover {
   transform: rotate(90deg);
 }
 
+.subcategory-row td:first-child {
+  padding-left: 1.75rem;
+}
+
 .category-detail-row td {
   padding: 0.75rem;
 }
@@ -320,8 +342,24 @@ tbody tr:hover {
   vertical-align: middle;
 }
 
-.category-select {
-  min-width: 9rem;
+/* .category-select/.subcategory-select are shared with the plain
+   (non-tabular) "Nieuwe regel toevoegen" forms on /categories and
+   regel_edit.html, where they should stay full-width like any other
+   form field — so this narrowing is scoped to .category-cell, /review's
+   table-cell wrapper (see below), not the bare classes. A long
+   categorie-/subcategorienaam would otherwise size the <select> to fit
+   its full selected text and push the rest of the /review table
+   off-screen — capped and ellipsized instead; the full name is still
+   available as a tooltip (title, kept in sync on change by the inline
+   onchange in review.html) and, of course, in the open dropdown
+   itself. */
+.category-cell .category-select,
+.category-cell .subcategory-select {
+  min-width: 7rem;
+  max-width: 8rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .category-new {
