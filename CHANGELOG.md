@@ -11,7 +11,23 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
-## [0.1.3] - 2026-11-02 - Duidelijkere Controle-pagina, maandkalender en uitlegpagina
+## [0.1.4] - 2026-11-02 — Pensioenplanner (in ontwikkeling)
+
+- **Nieuw**: `/pensioenplanner`, een eerste versie van een jaar-voor-jaar
+  projectie van je vermogen (spaargeld + beleggingen, elk met een eigen
+  rendementspercentage) op basis van inkomsten-/uitgavenposten — bedoeld
+  om in te schatten of, en wanneer, eerder stoppen met werken haalbaar is.
+  Posten worden automatisch voorgesteld uit je grootboekhistorie per
+  categorie/subcategorie (met een instelbaar groeipercentage per post,
+  i.p.v. één algemene inflatie), kunnen per stuk aan/uit gezet worden
+  zonder ze te verwijderen, en ondersteunen een vrij aantal personen zodat
+  AOW/pensioen op ieders eigen leeftijd kan ingaan. Inclusief CSV-export
+  van de jaartabel.
+- Nog expliciet gemarkeerd als **in ontwikkeling** (badge in de
+  navigatiebalk en boven aan de pagina's zelf) — indeling, berekening en
+  aannames kunnen nog veranderen voordat dit als afgerond geldt.
+
+## [0.1.3] - 2026-11-02 — Duidelijkere Controle-pagina, maandkalender en uitlegpagina
 
 - **Verduidelijkt**: de tekst op `/review` en het dashboard noemt de
   tabellen niet meer bij hun technische naam (`temp_afschrift`/
@@ -31,15 +47,15 @@ daarna is in het Nederlands.
   elke `/static/...`-link krijgt nu een versie-query op basis van de
   laatste wijzigingstijd van het bestand (`app/templating.py::static_url`).
 
-## [0.1.2] - 2026-09-02 - Quality of life updates
+## [0.1.2] - 2026-09-02 — Quality of life updates
 
 - **Nieuw**: dashboard tabel is nu onderverdeeld in subcategorien. Datum range default is vorige maand. Controle pagina is nu volledig zichtbaar zonder zijwaards scrollen.
 
-## [0.1.1] - 2026-08-31 - Windows button fix
+## [0.1.1] - 2026-08-31 — Windows button fix
 
 - **Nieuw**: bugfix voor de button, en handmatig opstarten op windows.
 
-## [0.1.0] - 2026-08-25 - Laatste aanpassingen & Export ready
+## [0.1.0] - 2026-08-25 — Laatste aanpassingen & Export ready
 
 - **Nieuw**: Aanpassingen gedaan in de suggesties zodat die beter is voor nieuwe gebruikers.
 - De app is nu af voor andere gebruikers. Yeey.
