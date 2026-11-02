@@ -16,7 +16,7 @@ from app.config import BASE_DIR
 from app.db import init_db
 from app.idle_shutdown import record_activity, watch_idle
 from app.logging_config import get_app_logger, setup_logging
-from app.routes import accounts, auth, categories, dashboard, onboarding, review, update, upload, user
+from app.routes import accounts, auth, categories, dashboard, help, onboarding, review, update, upload, user
 from app.session import get_or_create_session_secret
 from app.version import refresh_update_check
 
@@ -55,6 +55,7 @@ app.include_router(auth.router)
 app.include_router(accounts.router)
 app.include_router(categories.router)
 app.include_router(dashboard.router)
+app.include_router(help.router)
 app.include_router(onboarding.router)
 app.include_router(upload.router)
 app.include_router(review.router)

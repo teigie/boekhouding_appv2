@@ -3,8 +3,8 @@
 {% block content %}
   <h1>Dashboard</h1>
   <p class="muted">
-    Overzicht van je permanente grootboek (<code>afschrift</code>) voor de
-    gekozen maanden — nog niet gemigreerde rijen (zie
+    Overzicht van je permanente grootboek voor de gekozen maanden —
+    nog niet gemigreerde rijen (zie
     <a href="/review">Controle</a>) tellen hier niet mee.
   </p>
 
@@ -14,9 +14,33 @@
 
       <details open class="dashboard-section">
         <summary>Periode</summary>
-        <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.75rem;">
-          <label>Van<br><input type="month" name="start_month" id="start_month" value="{{ start_month }}"></label>
-          <label>Tot en met<br><input type="month" name="end_month" id="end_month" value="{{ end_month }}"></label>
+        <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.75rem; align-items: flex-start;">
+          <div class="month-picker">
+            <div class="muted">Van</div>
+            <button type="button" class="chip month-picker-trigger" aria-haspopup="true" aria-expanded="false">{{ start_month|maand_nl }}</button>
+            <div class="month-picker-popover" hidden>
+              <div class="month-picker-header">
+                <button type="button" class="month-picker-nav" data-nav="-1" aria-label="Vorig jaar">‹</button>
+                <span class="month-picker-year"></span>
+                <button type="button" class="month-picker-nav" data-nav="1" aria-label="Volgend jaar">›</button>
+              </div>
+              <div class="month-picker-grid"></div>
+            </div>
+            <input type="hidden" name="start_month" id="start_month" value="{{ start_month }}">
+          </div>
+          <div class="month-picker">
+            <div class="muted">Tot en met</div>
+            <button type="button" class="chip month-picker-trigger" aria-haspopup="true" aria-expanded="false">{{ end_month|maand_nl }}</button>
+            <div class="month-picker-popover" hidden>
+              <div class="month-picker-header">
+                <button type="button" class="month-picker-nav" data-nav="-1" aria-label="Vorig jaar">‹</button>
+                <span class="month-picker-year"></span>
+                <button type="button" class="month-picker-nav" data-nav="1" aria-label="Volgend jaar">›</button>
+              </div>
+              <div class="month-picker-grid"></div>
+            </div>
+            <input type="hidden" name="end_month" id="end_month" value="{{ end_month }}">
+          </div>
         </div>
         <div class="table-actions" style="flex-wrap: wrap; margin-top: 0.5rem;">
           {% for p in presets %}
@@ -352,8 +376,8 @@
   <section class="card" style="margin-top: 1.5rem;">
     <h2>Exporteren</h2>
     <p class="muted">
-      Exporteert alle <code>afschrift</code>-rijen binnen de hierboven
-      gekozen rekeningen, categorieën en periode als CSV-bestand — met
+      Exporteert alle grootboekrijen binnen de hierboven gekozen
+      rekeningen, categorieën en periode als CSV-bestand — met
       rekening, mutatiesoort en categorie als naam in plaats van interne
       ID's.
     </p>
@@ -361,6 +385,6 @@
   </section>
 {% endblock %}
 {% block scripts %}
-  <script src="/static/js/toc_toggle.js" defer></script>
-  <script src="/static/js/dashboard.js" defer></script>
+  <script src="{{ static_url('js/toc_toggle.js') }}" defer></script>
+  <script src="{{ static_url('js/dashboard.js') }}" defer></script>
 {% endblock %}

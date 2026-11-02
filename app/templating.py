@@ -3,6 +3,22 @@ template directory without each re-constructing its own."""
 from fastapi.templating import Jinja2Templates
 
 from app.config import BASE_DIR
+
+_STATIC_DIR = BASE_DIR / "app" / "static"
+
+
+def static_url(path: str) -> str:
+    """"js/dashboard.js" -> "/static/js/dashboard.js?v=<mtime>" — the
+    mtime-based query string changes the moment the file is edited, so
+    a normal reload always picks up the new version instead of the
+    browser serving a stale cached copy of a .js/.css file it has no
+    other reason to re-fetch (StaticFiles sets no Cache-Control, but
+    browsers still apply heuristic caching off Last-Modified)."""
+    try:
+        version = int((_STATIC_DIR / path).stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/static/{path}?v={version}"
 from app.formatting import (
     format_amount_nl,
     format_amount_nl_whole,
@@ -32,3 +48,4 @@ templates.env.globals["update_info"] = get_cached_update_info
 # show a stale "logged in as ..." header on the very /login page that
 # boot-id check just redirected to.
 templates.env.globals["current_user"] = current_user
+templates.env.globals["static_url"] = static_url

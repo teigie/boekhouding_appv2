@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Uitleg{% endblock %}
+{% block content %}
+  <h1>Hoe werkt Boekhouding?</h1>
+  <p class="muted">
+    In het kort: je <strong>upload</strong> een bankafschrift, de app
+    probeert elke rij automatisch te <strong>categoriseren</strong>, jij
+    <strong>controleert</strong> wat er nog openstaat, en pas daarna
+    verschijnt het op je <strong>Dashboard</strong>. Hieronder staat elke
+    stap wat uitgebreider.
+  </p>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <details open>
+      <summary>Rekeningen koppelen</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Een IBAN hoort altijd bij precies één gebruiker. Je kunt zelf
+        meerdere rekeningen koppelen op je profielpagina. Let op: een
+        rekening verwijderen is definitief — ook alle bankafschriften en
+        categoriseringen die erbij horen verdwijnen dan mee.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Een bankafschrift uploaden</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Bij Upload lever je het CSV-bestand van je bank aan. De app
+        controleert dan of de rijen op elkaar aansluiten (geen gaten of
+        dubbele mutaties) voordat er iets wordt opgeslagen — een bestand
+        wordt in zijn geheel geaccepteerd of in zijn geheel geweigerd,
+        nooit voor de helft.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Automatische categorisatie</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Elke categorie kan eigen regels hebben, bijvoorbeeld op de naam
+        van de tegenpartij of op een bedrag. Komt een rij overeen met
+        precies één categorie, dan wordt die automatisch toegekend. Komt
+        een rij met geen enkele of met meerdere categorieën overeen, dan
+        moet je zelf kiezen bij Controle.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Controle</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Hier staan alle rijen die nog aandacht nodig hebben: "onopgelost"
+        (geen automatische categorie gevonden) of "ambigu" (meerdere
+        categorieën kwamen overeen — kies zelf welke klopt). Zodra alle
+        rijen van een rekening zijn opgelost, verschijnt de knop
+        "Migreren naar grootboek" — pas daarna telt die data mee op je
+        Dashboard.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Dashboard en grootboek</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Het Dashboard toont alleen je grootboek: data die al volledig is
+        gecontroleerd en gemigreerd. Staat er op je profielpagina
+        "nog niet gemigreerd" bij een rekening, dan wacht die data nog bij
+        Controle. Op het Dashboard filter je op periode, rekening en
+        categorie, en kun je de getoonde selectie exporteren naar CSV.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Categorieën en regels beheren</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Je categorieën, subcategorieën en de regels die ze automatisch
+        toekennen beheer je op je profielpagina. Dit is jouw eigen lijst —
+        die wordt niet gedeeld met andere gebruikers. Subcategorieën zijn
+        optioneel.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <details>
+      <summary>Inloggen zonder wachtwoord</summary>
+      <p class="muted" style="margin-top: 0.5rem;">
+        Boekhouding is een lokale, persoonlijke app — er is geen
+        wachtwoord nodig, je kiest gewoon wie je bent.
+      </p>
+    </details>
+  </section>
+{% endblock %}

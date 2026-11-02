@@ -1,4 +1,107 @@
 (function () {
+  // Van/Tot en met: een kalender-popover (jaarpijltjes + maandraster)
+  // per veld, in plaats van <input type="month"> — Firefox rendert die
+  // niet als kalender, enkel als los te typen cijfers. Elke
+  // .month-picker beheert zijn eigen verborgen input (wat het formulier
+  // echt submit, zelfde "YYYY-MM"-vorm als voorheen, dus de
+  // preset-knoppen hieronder en de backend hoeven hier niets van af te
+  // weten) en knop-label; er staat er maar één tegelijk open.
+  var MONTH_NAMES_NL = [
+    "januari", "februari", "maart", "april", "mei", "juni",
+    "juli", "augustus", "september", "oktober", "november", "december",
+  ];
+  // Gangbare Nederlandse 3-letterafkortingen — niet simpelweg de eerste
+  // drie letters van de volledige naam, want dat geeft voor maart "maa"
+  // in plaats van het gebruikelijke "mrt".
+  var MONTH_ABBR_NL = [
+    "jan", "feb", "mrt", "apr", "mei", "jun",
+    "jul", "aug", "sep", "okt", "nov", "dec",
+  ];
+  var openPicker = null;
+
+  function closeOpenPicker() {
+    if (!openPicker) return;
+    openPicker.popover.hidden = true;
+    openPicker.trigger.setAttribute("aria-expanded", "false");
+    openPicker = null;
+  }
+
+  document.querySelectorAll(".month-picker").forEach(function (picker) {
+    var hidden = picker.querySelector('input[type="hidden"]');
+    var trigger = picker.querySelector(".month-picker-trigger");
+    var popover = picker.querySelector(".month-picker-popover");
+    var yearLabel = popover.querySelector(".month-picker-year");
+    var grid = popover.querySelector(".month-picker-grid");
+    var displayYear;
+
+    function current() {
+      var bits = hidden.value.split("-");
+      return { year: parseInt(bits[0], 10), month: parseInt(bits[1], 10) };
+    }
+
+    function updateTriggerLabel() {
+      // Zelfde afgekorte "okt 2026"-vorm als de rest van het dashboard
+      // (app/formatting.py::format_month_nl, de grafiek-as hieronder) —
+      // en dus ook identiek aan de server-gerenderde knoptekst bij het
+      // laden van de pagina, zodat er geen zichtbare sprong is zodra dit
+      // script draait.
+      var c = current();
+      trigger.textContent = MONTH_ABBR_NL[c.month - 1] + " " + c.year;
+    }
+
+    function renderGrid() {
+      yearLabel.textContent = displayYear;
+      grid.textContent = "";
+      var selected = current();
+      MONTH_NAMES_NL.forEach(function (name, index) {
+        var month = index + 1;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "month-picker-month";
+        if (selected.year === displayYear && selected.month === month) {
+          btn.classList.add("is-selected");
+        }
+        btn.textContent = MONTH_ABBR_NL[index];
+        btn.title = name;
+        btn.addEventListener("click", function () {
+          hidden.value = displayYear + "-" + (month < 10 ? "0" + month : month);
+          updateTriggerLabel();
+          closeOpenPicker();
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    trigger.addEventListener("click", function (evt) {
+      evt.stopPropagation();
+      var wasOpen = openPicker && openPicker.popover === popover;
+      closeOpenPicker();
+      if (wasOpen) return;
+      displayYear = current().year;
+      renderGrid();
+      popover.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      openPicker = { popover: popover, trigger: trigger };
+    });
+
+    popover.querySelectorAll(".month-picker-nav").forEach(function (nav) {
+      nav.addEventListener("click", function (evt) {
+        evt.stopPropagation();
+        displayYear += parseInt(nav.dataset.nav, 10);
+        renderGrid();
+      });
+    });
+
+    updateTriggerLabel();
+  });
+
+  document.addEventListener("click", function (evt) {
+    if (openPicker && !openPicker.popover.contains(evt.target)) closeOpenPicker();
+  });
+  document.addEventListener("keydown", function (evt) {
+    if (evt.key === "Escape") closeOpenPicker();
+  });
+
   // Preset-knoppen: vullen de maand-inputs en submitten hetzelfde
   // formulier, zodat de al aangevinkte rekeningen/categorieën/lijnen
   // behouden blijven (in tegenstelling tot een kant-en-klare <a href>

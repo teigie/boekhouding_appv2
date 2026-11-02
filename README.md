@@ -19,10 +19,12 @@ staat, per rekening in een eigen tabel, elke `temp_afschrift`-rij
 (opgelost én niet, ook ambigue) met een dropdown om de categorie te
 kiezen of corrigeren — één opslaan-knop per tabel verwerkt alle rijen van
 die rekening ineens, en checkt meteen of de rekening klaar is voor
-migratie naar het permanente grootboek (`afschrift`), wat vanaf diezelfde
-pagina met één knop kan zodra alle rijen opgelost zijn. Het dashboard
-(`/`) rapporteert over dat grootboek: filterbaar op maand, rekening en
-categorie, met een lijngrafiek. Een rekening verwijderen
+migratie naar het permanente grootboek, wat vanaf diezelfde pagina met
+één knop kan zodra alle rijen opgelost zijn. Het dashboard (`/`)
+rapporteert over dat grootboek: filterbaar op een maandperiode (via een
+klikbare kalender-popover), rekening en categorie, met een lijngrafiek.
+Een "i"-knop in de navigatiebalk (`/uitleg`) legt dit hele proces in
+gewone taal uit. Een rekening verwijderen
 (profielpagina, `/user/{username}`) neemt haar volledige
 `temp_afschrift`- én `afschrift`-geschiedenis in dezelfde
 alles-of-niets-actie mee, met een voorafgaande waarschuwing die precies
@@ -80,7 +82,11 @@ betrouwbaar: elke interne link in de app is óók een paginanavigatie, dus
 er is geen manier om dat te onderscheiden van écht wegklikken — vandaar
 inactiviteit als signaal.) Dit geldt niet voor gewoon `python run.py`
 tijdens ontwikkelen — die blijft ongewijzigd draaien tot je hem zelf
-stopt. Zelf instellen kan via een omgevingsvariabele vóór het starten van
+stopt, én herlaadt zichzelf automatisch bij codewijzigingen (`--reload`).
+De snelkoppelingen starten de server juist zónder `--reload` — pas je
+zelf iets aan de code aan terwijl de app zo draait, dan moet je de server
+handmatig herstarten (afsluiten + snelkoppeling opnieuw) voordat je de
+wijziging ziet. Zelf instellen kan via een omgevingsvariabele vóór het starten van
 de snelkoppeling, bijvoorbeeld 10 minuten, of `0` om uit te schakelen:
 
 ```bash
@@ -161,6 +167,7 @@ app/                    FastAPI-applicatie
     dashboard.py            /
     upload.py               /upload
     review.py                /review (overzicht per rekening + categorie corrigeren/toevoegen)
+    help.py                   /uitleg (hoe werkt de app, in gewone taal)
   templates/              Jinja2 HTML-templates
   static/                 CSS/JS, ongewijzigd geserveerd
 

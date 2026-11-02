@@ -11,6 +11,26 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.3] - 2026-11-02 - Duidelijkere Controle-pagina, maandkalender en uitlegpagina
+
+- **Verduidelijkt**: de tekst op `/review` en het dashboard noemt de
+  tabellen niet meer bij hun technische naam (`temp_afschrift`/
+  `afschrift`), maar beschrijft wat ze betekenen: "te controleren
+  mutaties" en "grootboek".
+- **Nieuw**: de Van/Tot en met-maandkeuze op het dashboard is nu een
+  klikbare kalender-popover (jaarpijltjes + maandraster) in plaats van
+  een `<input type="month">` — dat laatste moest je in Firefox nog
+  intypen in plaats van kunnen aanklikken.
+- **Nieuw**: een "i"-knop tussen je gebruikersnaam en "Uitloggen" linkt
+  naar een nieuwe uitlegpagina (`/uitleg`, `app/routes/help.py`) die de
+  hele werking van de app (rekeningen, uploaden, automatische
+  categorisatie, Controle, migreren naar het grootboek, Dashboard) in
+  gewone taal samenvat.
+- **Fix**: statische CSS/JS-bestanden hadden geen cache-busting, waardoor
+  een browser soms een verouderde versie bleef gebruiken na een update —
+  elke `/static/...`-link krijgt nu een versie-query op basis van de
+  laatste wijzigingstijd van het bestand (`app/templating.py::static_url`).
+
 ## [0.1.2] - 2026-09-02 - Quality of life updates
 
 - **Nieuw**: dashboard tabel is nu onderverdeeld in subcategorien. Datum range default is vorige maand. Controle pagina is nu volledig zichtbaar zonder zijwaards scrollen.
