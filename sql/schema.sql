@@ -251,3 +251,87 @@ create table afschrift (
 	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID),
 	foreign key (Afschrift_subcat_ID) references afschrift_subcategorien(ID)
 );
+
+-- ---------------------------------------------------------------------------
+-- Pensioenplanner ("eerder stoppen"-projectie)
+-- ---------------------------------------------------------------------------
+-- Added after the app's initial release — unlike every table above, a
+-- CREATE TABLE here alone does NOT reach an already-existing installation
+-- (app/db.py only runs this whole file against a brand-new database). See
+-- sql/fire_schema.sql for the idempotent "create table if not exists"
+-- copy of these same three tables that app/db.py always runs, so an
+-- existing data/boekhouding.db still picks them up.
+
+-- One row per user: projection horizon, the default growth percentage a
+-- fire_post falls back to when it has none of its own, and the two
+-- wealth "pots" (cash savings vs. investments), each with its own annual
+-- return — see app/fire_projection.py. All percentages are plain numbers
+-- per year (e.g. 2.5 for 2.5%), never pre-divided by 100.
+create table fire_instellingen (
+	user_ID integer primary key,
+	start_jaar integer not null,
+	eind_jaar integer not null,
+	historie_maanden integer not null default 24,
+	algemeen_groei_pct dec(5,2) not null default 0,
+	saldo_spaargeld dec(12,2) not null default 0,
+	rendement_spaargeld_pct dec(5,2) not null default 0,
+	saldo_beleggingen dec(12,2) not null default 0,
+	rendement_beleggingen_pct dec(5,2) not null default 0,
+	updated_at datetime not null,
+	foreign key (user_ID) references Users(ID)
+);
+
+-- People tracked for the projection (e.g. both partners of a household
+-- that books under one shared login) — purely so an age-based input
+-- ("from age 67") on a fire_post can be resolved into the calendar year
+-- the projection itself actually runs on (see fire_posten.start_jaar/
+-- stop_jaar below and app/fire_projection.py's module docstring for why
+-- age alone can't be the projection's time axis). A free number of rows
+-- per user, not hardcoded to one or two.
+create table fire_personen (
+	ID integer primary key autoincrement,
+	user_ID integer not null,
+	naam varchar(100) not null,
+	geboortejaar integer not null,
+	foreign key (user_ID) references Users(ID)
+);
+
+-- One row per income/expense line in the projection — generalizes both
+-- the plain category columns and the separate AOW/pension income sources
+-- from the spreadsheet this feature replaces, so there are no fixed
+-- slots. Afschrift_cat_ID/Afschrift_subcat_ID are set for a post that
+-- mirrors an existing spending category (its jaarbedrag can be
+-- auto-suggested from grootboek history, see
+-- sql/queries/fire/categorie_baseline_for_user.sql); both NULL for a post
+-- that doesn't exist in transaction history yet (AOW, pension). persoon_ID
+-- is purely a UI convenience — whichever calendar year ends up in
+-- start_jaar/stop_jaar (resolved once at save time, possibly from an
+-- age + persoon_ID pair) is always the one the projection actually reads.
+-- actief lets a suggested or previously-added post be excluded from the
+-- projection without deleting it (and losing its auto-computed baseline).
+-- jaarbedrag is always a positive magnitude, never signed — same
+-- convention as afschrift.Bedrag_eur/Af_bij: the direction lives in
+-- `type`, not in the amount (see app/fire_projection.py).
+create table fire_posten (
+	ID integer primary key autoincrement,
+	user_ID integer not null,
+	omschrijving varchar(200) not null,
+	Afschrift_cat_ID integer,
+	Afschrift_subcat_ID integer,
+	persoon_ID integer,
+	type varchar(10) not null check (type in ('Inkomsten', 'Uitgaven')),
+	jaarbedrag dec(12,2) not null default 0,
+	groei_pct dec(5,2),
+	start_jaar integer,
+	stop_jaar integer,
+	eenmalig integer not null default 0 check (eenmalig in (0, 1)),
+	actief integer not null default 1 check (actief in (0, 1)),
+	updated_at datetime not null,
+	foreign key (user_ID) references Users(ID),
+	foreign key (Afschrift_cat_ID) references afschrift_categorien(ID),
+	foreign key (Afschrift_subcat_ID) references afschrift_subcategorien(ID),
+	-- SET NULL, not CASCADE/RESTRICT: persoon_ID is only a labeling
+	-- convenience on a post (see above), never what defines it — removing
+	-- a persoon should just clear it from any post that referenced it.
+	foreign key (persoon_ID) references fire_personen(ID) on delete set null
+);

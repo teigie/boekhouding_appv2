@@ -62,6 +62,22 @@ def format_amount_nl(value: float) -> str:
     return f"{sign}{_group_thousands(whole)},{frac}"
 
 
+def parse_amount_nl(raw: str) -> float:
+    """Reverse of format_amount_nl: a Dutch-formatted amount string
+    ('.' thousands, ',' decimals, e.g. "1.234,56") -> float. '.' is
+    always treated as a thousands separator here, never a decimal point
+    — stripped outright, never interpreted. Raises ValueError on
+    anything that isn't a valid amount once stripped; the caller is
+    responsible for turning that into a Dutch, user-facing error message
+    (see app/routes/pensioenplanner.py). A near-identical parser already
+    exists for rule conditions (app/categorization_rules.py::
+    _parse_dutch_amount) — kept separate since that one raises its own
+    InvalidKeywordError and returns a canonical string rather than a
+    float, for a different caller."""
+    cleaned = raw.strip().replace(".", "").replace(",", ".")
+    return float(cleaned)
+
+
 def format_amount_nl_whole(value: float) -> str:
     """Same thousands-grouping as format_amount_nl, but rounded to a
     whole number with no decimals — used for the dashboard chart's y-axis

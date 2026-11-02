@@ -120,24 +120,12 @@
   }
 
   // "Alles selecteren"/"Alles deselecteren" boven de categorieën- en
-  // grafieklijnen-checkboxes (data-check-group is de checkbox-naam, dus
-  // dit werkt voor elke checkbox-groep die zo'n knoppenpaar krijgt) — zet
-  // alleen de checkboxen zelf om, submit niets: de gebruiker klikt zelf
-  // nog op "Filteren" zodra de selectie klopt. Een "change"-event erna
-  // laat de cascade-handler hieronder meteen ook de bijbehorende
-  // subcategorieën meenemen wanneer dit de cat_ids-groep is (op andere
-  // groepen, zoals graph_lines, luistert niets naar dat event — die doen
-  // dus gewoon niets extra).
-  document.querySelectorAll(".checkbox-toggle-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var checked = btn.dataset.checkAction === "all";
-      var selector = 'input[type="checkbox"][name="' + btn.dataset.checkGroup + '"]';
-      document.querySelectorAll(selector).forEach(function (box) {
-        box.checked = checked;
-        box.dispatchEvent(new Event("change"));
-      });
-    });
-  });
+  // grafieklijnen-checkboxes: generic handler, now in toc_toggle.js
+  // (always loaded alongside this file) since the pensioenplanner needs
+  // the exact same behavior for its "Actief"-kolom. A "change" event
+  // fired there is what the cascade handler right below listens for, so
+  // checking/unchecking "cat_ids" in bulk still takes the subcategorieën
+  // along with it.
 
   // Een categorie-checkbox met eigen subcategorieën (.dash-cat-checkbox,
   // data-subcat-group wijst naar het bijbehorende blokje, zie
@@ -157,33 +145,11 @@
     });
   });
 
-  // "Per categorie": elke categorie- én subcategorierij is klikbaar (en
-  // met Enter/Spatie bedienbaar, vandaar tabindex + role="button" in
-  // index.html) en toont/verbergt de bijbehorende detailrij — voor een
-  // categorierij is dat een tabel met haar subcategorieën, voor een
-  // subcategorierij de onderliggende statements. Alle rijen zijn al
-  // server-side gerenderd (ook genest, binnenin een nog verborgen
-  // categorie-detailrij), dit schakelt alleen het `hidden`-attribuut om.
-  // Losstaand van de grafiekcode hieronder, die stopt (return) als er
-  // geen grafiek is.
-  document.querySelectorAll(".category-row").forEach(function (row) {
-    var target = document.getElementById(row.dataset.catTarget);
-    if (!target) return;
-
-    function toggle() {
-      var expanded = row.getAttribute("aria-expanded") === "true";
-      row.setAttribute("aria-expanded", String(!expanded));
-      target.hidden = expanded;
-    }
-
-    row.addEventListener("click", toggle);
-    row.addEventListener("keydown", function (evt) {
-      if (evt.key === "Enter" || evt.key === " ") {
-        evt.preventDefault();
-        toggle();
-      }
-    });
-  });
+  // "Per categorie": elke categorie- én subcategorierij is klikbaar en
+  // toont/verbergt de bijbehorende detailrij — generic handler, nu in
+  // toc_toggle.js (always loaded alongside this file) sinds de
+  // pensioenplanner dezelfde rij-toggle nodig heeft voor haar
+  // hoofdcategorie-groepen.
 
   // Lijngrafiek: crosshair + één tooltip die alle zichtbare lijnen voor
   // de dichtstbijzijnde maand toont (zie de dataviz-richtlijnen: één

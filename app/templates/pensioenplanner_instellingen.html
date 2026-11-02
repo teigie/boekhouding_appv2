@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Pensioenplanner instellingen{% endblock %}
+{% block content_class %}content--wide{% endblock %}
+{% block content %}
+  <h1>Pensioenplanner — instellingen <span class="badge-wip">in ontwikkeling</span></h1>
+  <p class="muted">
+    Deze pagina is nog in ontwikkeling — de berekening, indeling en
+    aannames kunnen nog veranderen.
+  </p>
+  <p class="muted">
+    Stel hier je projectiehorizon, vermogen en de posten in die meetellen
+    in de <a href="/pensioenplanner">projectie</a>. Voorgestelde posten
+    worden automatisch aangemaakt op basis van je grootboekhistorie — zet
+    een post uit (of pas hem aan) in plaats van hem te verwijderen als hij
+    niet representatief is voor de toekomst.
+  </p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <section class="card">
+    <h2>Algemeen</h2>
+    <form method="post" action="/pensioenplanner/instellingen">
+      <div class="table-actions" style="flex-wrap: wrap; gap: 1.5rem; align-items: flex-end;">
+        <label>Startjaar<br><input type="number" name="start_jaar" value="{{ instellingen['start_jaar'] }}" required></label>
+        <label>Eindjaar (horizon)<br><input type="number" name="eind_jaar" value="{{ instellingen['eind_jaar'] }}" required></label>
+        <label>Historie voor voorstellen (maanden)<br><input type="number" name="historie_maanden" value="{{ instellingen['historie_maanden'] }}" required></label>
+        <label>Algemeen groeipercentage (%/jaar)<br><input type="number" step="0.1" name="algemeen_groei_pct" value="{{ instellingen['algemeen_groei_pct'] }}" required></label>
+      </div>
+      <div class="table-actions" style="flex-wrap: wrap; gap: 1.5rem; align-items: flex-end; margin-top: 1rem;">
+        <label>Saldo spaargeld (€)<br><input type="text" inputmode="decimal" name="saldo_spaargeld" value="{{ instellingen['saldo_spaargeld'] }}" placeholder="bv. 12.345,67" required></label>
+        <label>Rendement spaargeld (%/jaar)<br><input type="number" step="0.1" name="rendement_spaargeld_pct" value="{{ instellingen['rendement_spaargeld_pct'] }}" required></label>
+        <label>Saldo beleggingen (€)<br><input type="text" inputmode="decimal" name="saldo_beleggingen" value="{{ instellingen['saldo_beleggingen'] }}" placeholder="bv. 12.345,67" required></label>
+        <label>Rendement beleggingen (%/jaar)<br><input type="number" step="0.1" name="rendement_beleggingen_pct" value="{{ instellingen['rendement_beleggingen_pct'] }}" required></label>
+      </div>
+      <button type="submit" style="margin-top: 1rem;">Opslaan</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Personen</h2>
+    <p class="muted">
+      Gebruikt om "vanaf leeftijd X"-invoer bij posten hieronder om te
+      rekenen naar een kalenderjaar — handig als twee mensen onder dit
+      account boekhouden en elk hun eigen AOW/pensioenleeftijd hebben.
+    </p>
+    {% if personen %}
+      <ul>
+        {% for p in personen %}
+          <li>
+            {{ p["naam"] }} (geboortejaar {{ p["geboortejaar"] }})
+            <form method="post" action="/pensioenplanner/personen/{{ p['ID'] }}/delete" class="inline-form">
+              <button type="submit" class="link-button">Verwijderen</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    <form method="post" action="/pensioenplanner/personen" class="table-actions">
+      <input type="text" name="naam" placeholder="Naam" required>
+      <input type="number" name="geboortejaar" placeholder="Geboortejaar" required>
+      <button type="submit">Toevoegen</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <div class="table-actions" style="justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0;">Posten</h2>
+      <form method="post" action="/pensioenplanner/posten/ververs">
+        <button type="submit" class="chip">Ververs voorstellen</button>
+      </form>
+    </div>
+    <p class="muted">
+      Posten staan gegroepeerd per hoofdcategorie — klik op een categorie
+      om de onderliggende posten te tonen en per stuk aan/uit te zetten.
+      Een post zonder categorie (bv. AOW of pensioen) bestaat nog niet in
+      je grootboek en staat los onderaan.
+    </p>
+
+    {% if groepen or losse_posten %}
+      <div class="table-actions" style="gap: 0.5rem; margin: 0.75rem 0;">
+        <button type="button" class="chip checkbox-toggle-btn" data-check-group="actief_ids" data-check-action="all">Alles selecteren</button>
+        <button type="button" class="chip checkbox-toggle-btn" data-check-group="actief_ids" data-check-action="none">Alles deselecteren</button>
+      </div>
+
+      {% macro post_row(post) %}
+        <tr>
+          <td><input type="checkbox" name="actief_ids" value="{{ post['ID'] }}" {{ "checked" if post["actief"] }}></td>
+          <td><input type="text" name="omschrijving_{{ post['ID'] }}" value="{{ post['omschrijving'] }}" style="width: 14rem;"></td>
+          <td>
+            <select name="persoon_id_{{ post['ID'] }}">
+              <option value="">—</option>
+              {% for p in personen %}
+                <option value="{{ p['ID'] }}" {{ "selected" if post["persoon_id"] == p["ID"] }}>{{ p["naam"] }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td class="col-amount">
+            <input
+              type="text" inputmode="decimal" name="jaarbedrag_{{ post['ID'] }}"
+              value="{{ post['jaarbedrag']|bedrag_nl }}"
+              class="{{ 'amount-af' if post['type'] == 'Uitgaven' else 'amount-bij' }}"
+              style="width: 8rem; text-align: right;"
+            >
+          </td>
+          <td><input type="number" step="0.1" name="groei_pct_{{ post['ID'] }}" value="{{ post['groei_pct'] if post['groei_pct'] is not none else '' }}" style="width: 5rem;"></td>
+          <td>
+            <input type="number" name="start_jaar_{{ post['ID'] }}" value="{{ post['start_jaar'] if post['start_jaar'] is not none else '' }}" placeholder="jaar" style="width: 5rem;">
+            <input type="number" name="start_leeftijd_{{ post['ID'] }}" placeholder="of leeftijd" style="width: 6rem;">
+          </td>
+          <td>
+            <input type="number" name="stop_jaar_{{ post['ID'] }}" value="{{ post['stop_jaar'] if post['stop_jaar'] is not none else '' }}" placeholder="jaar" style="width: 5rem;">
+            <input type="number" name="stop_leeftijd_{{ post['ID'] }}" placeholder="of leeftijd" style="width: 6rem;">
+          </td>
+          <td><input type="checkbox" name="eenmalig_{{ post['ID'] }}" {{ "checked" if post["eenmalig"] }}></td>
+          <td class="table-actions" style="gap: 0.35rem; flex-wrap: nowrap;">
+            <button type="submit" class="chip" formaction="/pensioenplanner/posten/{{ post['ID'] }}/duplicate">Dupliceren</button>
+            <button type="submit" class="chip" formaction="/pensioenplanner/posten/{{ post['ID'] }}/delete">Verwijderen</button>
+          </td>
+        </tr>
+      {% endmacro %}
+
+      <form method="post" action="/pensioenplanner/posten/save">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Actief</th>
+                <th>Omschrijving</th>
+                <th>Persoon</th>
+                <th class="col-amount">Jaarbedrag (€)</th>
+                <th>Groei % (leeg = algemeen)</th>
+                <th>Start jaar / leeftijd</th>
+                <th>Stop jaar / leeftijd</th>
+                <th>Eenmalig</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for groep in groepen %}
+                <tr class="category-row" data-cat-target="post-group-{{ groep.cat_id }}" tabindex="0" role="button" aria-expanded="false">
+                  <td colspan="3"><span class="category-chevron">▸</span> {{ groep["category"] }}</td>
+                  <td class="col-amount {{ 'amount-af' if groep['type'] == 'Uitgaven' else 'amount-bij' }}">€ {{ groep["totaal_jaarbedrag"]|bedrag_nl }}</td>
+                  <td colspan="5"></td>
+                </tr>
+                <tr class="category-detail-row" id="post-group-{{ groep.cat_id }}" hidden>
+                  <td colspan="9">
+                    <div class="table-scroll">
+                      <table class="category-statements">
+                        <tbody>
+                          {% for post in groep.posten %}{{ post_row(post) }}{% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+
+              {% if losse_posten %}
+                <tr>
+                  <td colspan="9" class="muted" style="padding-top: 1rem;">Losse posten (geen categorie)</td>
+                </tr>
+                {% for post in losse_posten %}{{ post_row(post) }}{% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <button type="submit" style="margin-top: 0.75rem;">Tabel opslaan</button>
+      </form>
+    {% else %}
+      <p class="muted">Nog geen posten — klik op "Ververs voorstellen" of voeg er hieronder handmatig een toe.</p>
+    {% endif %}
+
+    <form method="post" action="/pensioenplanner/posten" class="table-actions" style="margin-top: 1rem; flex-wrap: wrap;">
+      <input type="text" name="omschrijving" placeholder="Omschrijving (bv. AOW)" required>
+      <select name="post_type" required>
+        <option value="Inkomsten">Inkomsten</option>
+        <option value="Uitgaven">Uitgaven</option>
+      </select>
+      <input type="text" inputmode="decimal" name="jaarbedrag" placeholder="Jaarbedrag (€), bv. 1.234,56">
+      <button type="submit">Post toevoegen</button>
+    </form>
+  </section>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ static_url('js/toc_toggle.js') }}" defer></script>
+{% endblock %}

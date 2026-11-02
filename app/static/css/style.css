@@ -147,6 +147,24 @@ body {
   color: var(--accent);
 }
 
+/* Marks a feature that's still being actively worked on — currently only
+   the pensioenplanner (see app/templates/base.html's nav link and the
+   notice at the top of its own pages). Deliberately subdued (muted, not
+   the accent color) so it reads as informational, not an error/warning. */
+.badge-wip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
 .topbar__nav a {
   color: var(--muted);
   text-decoration: none;

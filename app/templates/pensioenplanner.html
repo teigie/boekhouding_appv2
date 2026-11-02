@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Boekhouding — Pensioenplanner{% endblock %}
+{% block content_class %}content--wide{% endblock %}
+{% block content %}
+  <h1>Pensioenplanner <span class="badge-wip">in ontwikkeling</span></h1>
+  <p class="muted">
+    Deze pagina is nog in ontwikkeling — de berekening, indeling en
+    aannames kunnen nog veranderen. Gebruik de uitkomst dus als eerste
+    inschatting, niet als eindoordeel.
+  </p>
+  <p class="muted">
+    Projectie van je vermogen op basis van je
+    <a href="/pensioenplanner/instellingen">instellingen en posten</a> —
+    een inschatting, geen garantie. Pas de aannames gerust aan en bekijk
+    het effect.
+  </p>
+
+  <section class="card">
+    {% if projectie.jaar_geld_op %}
+      <p class="error" style="margin: 0;">
+        Bij de huidige aannames raakt je vermogen op in {{ projectie.jaar_geld_op }}.
+      </p>
+    {% else %}
+      <p class="result-ok" style="margin: 0;">
+        Bij de huidige aannames raakt je vermogen niet op binnen de projectie (tot {{ instellingen['eind_jaar'] }}).
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Verloop van je vermogen</h2>
+    {% if chart %}
+      <div class="chart-wrap">
+        <svg class="dashboard-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Lijngrafiek van de vermogensprojectie">
+          {% for t in chart.y_ticks %}
+            <line class="chart-grid" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ t.y }}" y2="{{ t.y }}"></line>
+            <text class="chart-axis-label" x="{{ chart.plot.x0 - 8 }}" y="{{ t.y + 3 }}" text-anchor="end">€ {{ t.value|bedrag_nl_whole }}</text>
+          {% endfor %}
+          {% if chart.zero_y is not none %}
+            <line class="chart-zero" x1="{{ chart.plot.x0 }}" x2="{{ chart.plot.x1 }}" y1="{{ chart.zero_y }}" y2="{{ chart.zero_y }}"></line>
+          {% endif %}
+          {% for t in chart.x_ticks %}
+            <text class="chart-axis-label" x="{{ t.x }}" y="{{ chart.plot.y1 + 20 }}" text-anchor="middle">{{ t.label }}</text>
+          {% endfor %}
+          {% for s in chart.series %}
+            <polyline class="chart-line" style="stroke: var({{ s.color_var }}); stroke-dasharray: {{ s.dash }};"
+                      points="{% for p in s.points %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
+          {% endfor %}
+        </svg>
+      </div>
+      <div class="chart-legend">
+        {% for s in chart.series %}
+          <span class="chart-legend-item">
+            <span class="chart-legend-swatch" style="background: var({{ s.color_var }});"></span>{{ s.label }}
+          </span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">Geen (actieve) posten ingesteld — ga naar <a href="/pensioenplanner/instellingen">instellingen</a>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Jaartabel</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Jaar</th>
+            {% for p in personen %}<th>Leeftijd {{ p["naam"] }}</th>{% endfor %}
+            <th class="col-amount">Inkomsten</th>
+            <th class="col-amount">Uitgaven</th>
+            <th class="col-amount">Netto</th>
+            <th class="col-amount">Spaargeld</th>
+            <th class="col-amount">Beleggingen</th>
+            <th class="col-amount">Totaal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in projectie.jaren %}
+            <tr>
+              <td>{{ j["jaar"] }}</td>
+              {% for p in personen %}<td>{{ j["leeftijden"][p["ID"]] }}</td>{% endfor %}
+              <td class="col-amount amount-bij">€ {{ j["inkomsten"]|bedrag_nl }}</td>
+              <td class="col-amount amount-af">€ {{ j["uitgaven"]|bedrag_nl }}</td>
+              <td class="col-amount {{ 'amount-bij' if j['netto'] >= 0 else 'amount-af' }}">€ {{ j["netto"]|bedrag_nl }}</td>
+              <td class="col-amount">€ {{ j["saldo_spaargeld"]|bedrag_nl }}</td>
+              <td class="col-amount">€ {{ j["saldo_beleggingen"]|bedrag_nl }}</td>
+              <td class="col-amount {{ 'amount-af' if j['totaal'] < 0 else '' }}">€ {{ j["totaal"]|bedrag_nl }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 1.5rem;">
+    <h2>Exporteren</h2>
+    <p class="muted">Exporteert de volledige jaartabel hierboven als CSV-bestand.</p>
+    <a href="{{ export_url }}" class="chip">Exporteren naar CSV</a>
+  </section>
+{% endblock %}
