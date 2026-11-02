@@ -27,3 +27,6 @@ env/
 
 # Claude Code project guidance (local-only, not shared via git)
 CLAUDE.md
+
+#data
+eerder_stoppen_template.ods
