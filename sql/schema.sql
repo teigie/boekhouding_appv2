@@ -335,3 +335,21 @@ create table fire_posten (
 	-- a persoon should just clear it from any post that referenced it.
 	foreign key (persoon_ID) references fire_personen(ID) on delete set null
 );
+
+-- Which of a user's own Rekeningen feed the pensioenplanner's
+-- auto-suggestion baseline (categorie_baseline_for_user.sql) and its
+-- history window anchor (sql/queries/fire/date_bounds_for_user.sql) — a
+-- user with several linked accounts (e.g. a joint account plus a private
+-- one) may want only a subset counted. Always has exactly one row per
+-- (user, Rekening) pair once app/routes/pensioenplanner.py's sync step has
+-- run — a newly linked Rekening is synced in as actief=1 (included by
+-- default) so existing behavior (everything counts) never silently
+-- changes just because this table exists.
+create table fire_rekening_selectie (
+	user_ID integer not null,
+	Rekening_ID integer not null,
+	actief integer not null default 1 check (actief in (0, 1)),
+	primary key (user_ID, Rekening_ID),
+	foreign key (user_ID) references Users(ID),
+	foreign key (Rekening_ID) references Rekening(ID)
+);

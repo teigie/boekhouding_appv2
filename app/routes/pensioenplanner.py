@@ -29,7 +29,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from app.config import SQL_DIR
-from app.dashboard_chart import add_months, build_chart, build_series
+from app.dashboard_chart import add_months, build_chart, build_series, month_range
 from app.db import get_connection
 from app.fire_projection import build_projection
 from app.formatting import format_amount_nl, parse_amount_nl
@@ -53,6 +53,15 @@ _ADD_POST_SQL = (SQL_DIR / "queries" / "fire" / "add_post.sql").read_text(encodi
 _UPDATE_POST_SQL = (SQL_DIR / "queries" / "fire" / "update_post.sql").read_text(encoding="utf-8")
 _DELETE_POST_SQL = (SQL_DIR / "queries" / "fire" / "delete_post.sql").read_text(encoding="utf-8")
 _BASELINE_SQL = (SQL_DIR / "queries" / "fire" / "categorie_baseline_for_user.sql").read_text(encoding="utf-8")
+_UPDATE_POST_BEDRAG_SQL = (SQL_DIR / "queries" / "fire" / "update_post_bedrag.sql").read_text(encoding="utf-8")
+_DATE_BOUNDS_SQL = (SQL_DIR / "queries" / "fire" / "date_bounds_for_user.sql").read_text(encoding="utf-8")
+_SYNC_REKENING_SELECTIE_SQL = (SQL_DIR / "queries" / "fire" / "sync_rekening_selectie.sql").read_text(encoding="utf-8")
+_LIST_REKENING_SELECTIE_SQL = (
+    SQL_DIR / "queries" / "fire" / "list_rekening_selectie_for_user.sql"
+).read_text(encoding="utf-8")
+_UPDATE_REKENING_SELECTIE_SQL = (
+    SQL_DIR / "queries" / "fire" / "update_rekening_selectie.sql"
+).read_text(encoding="utf-8")
 
 _INSTELLINGEN_URL = "/pensioenplanner/instellingen"
 
@@ -190,7 +199,7 @@ def _instellingen_display(instellingen) -> dict:
     }
 
 
-def _annualized_bedrag(netto_totaal: float, aantal_maanden: int) -> float:
+def _annualized_bedrag(netto_totaal: float, venster_maanden: int) -> float:
     """fire_posten.jaarbedrag is always a positive magnitude — same
     convention as afschrift.Bedrag_eur, where the sign lives in a
     separate direction field (there Af_bij, here a post's type) rather
@@ -199,10 +208,49 @@ def _annualized_bedrag(netto_totaal: float, aantal_maanden: int) -> float:
     direction rows correctly (see its own docstring), but an Uitgaven
     category's net is normally negative — abs() here turns that into the
     magnitude a jaarbedrag is supposed to be; app/fire_projection.py is
-    what actually applies the direction, via the post's type."""
-    if not aantal_maanden:
+    what actually applies the direction, via the post's type.
+
+    venster_maanden is the window's total elapsed calendar months (see
+    _baseline_venster), not how many of those months this one category
+    happened to have a transaction in — a cost that recurs less than
+    monthly (e.g. a twice-a-year road tax payment) would otherwise get
+    divided by its own occurrence count and badly overstated."""
+    if not venster_maanden:
         return 0.0
-    return abs(netto_totaal / aantal_maanden * 12)
+    return abs(netto_totaal / venster_maanden * 12)
+
+
+def _load_rekening_selectie(conn, user_id: int):
+    """Ensures every one of the user's Rekeningen has a
+    fire_rekening_selectie row (new accounts default to included, see
+    sync_rekening_selectie.sql's docstring) and returns the full list for
+    display. Called on every visit to the instellingen page, not just the
+    first, since a Rekening can be linked at any time."""
+    conn.execute(_SYNC_REKENING_SELECTIE_SQL, {"user_id": user_id})
+    return conn.execute(_LIST_REKENING_SELECTIE_SQL, {"user_id": user_id}).fetchall()
+
+
+def _baseline_venster(conn, user_id: int, historie_maanden: int) -> tuple[date, date, int]:
+    """Anchors the auto-suggestion window to the last afschrift date among
+    the user's SELECTED Rekeningen (see fire_rekening_selectie /
+    sql/queries/fire/date_bounds_for_user.sql) rather than wall-clock
+    `today` — a window computed from `today` can otherwise slide past the
+    last actual upload (e.g. no statement imported in recent months),
+    making every category look like it had zero activity in that gap
+    instead of simply not-yet-uploaded data. Also clips the start to the
+    earliest afschrift among those same accounts, so a young account isn't
+    divided by months it didn't exist for. Returns
+    (start, end, venster_maanden) — venster_maanden is the actual elapsed
+    calendar months after clipping, fed to _annualized_bedrag."""
+    bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user_id}).fetchone()
+    min_datum, max_datum = (bounds["min_datum"], bounds["max_datum"]) if bounds else (None, None)
+
+    end = date.fromisoformat(max_datum) if max_datum else date.today()
+    start = add_months(end.replace(day=1), -historie_maanden)
+    if min_datum and date.fromisoformat(min_datum) > start:
+        start = date.fromisoformat(min_datum)
+    venster_maanden = len(month_range(start, end))
+    return start, end, venster_maanden
 
 
 def _sync_voorgestelde_posten(conn, user_id: int, instellingen) -> int:
@@ -210,12 +258,12 @@ def _sync_voorgestelde_posten(conn, user_id: int, instellingen) -> int:
     with historical activity in the configured history window that
     doesn't already have one (regardless of that existing post's actief
     state or how its amount has since been edited) — never touches an
-    existing post. Returns how many posts were added."""
+    existing post, see _herbereken_posten for that. Returns how many
+    posts were added."""
     existing = conn.execute(_LIST_POSTEN_SQL, {"user_id": user_id}).fetchall()
     existing_keys = {(r["afschrift_cat_id"], r["afschrift_subcat_id"]) for r in existing}
 
-    end = date.today()
-    start = add_months(end.replace(day=1), -instellingen["historie_maanden"])
+    start, end, venster_maanden = _baseline_venster(conn, user_id, instellingen["historie_maanden"])
     baseline_rows = conn.execute(
         _BASELINE_SQL, {"user_id": user_id, "start": start.isoformat(), "end": end.isoformat()}
     ).fetchall()
@@ -235,7 +283,7 @@ def _sync_voorgestelde_posten(conn, user_id: int, instellingen) -> int:
                 "afschrift_subcat_id": row["subcat_id"],
                 "persoon_id": None,
                 "type": row["cat_type"],
-                "jaarbedrag": round(_annualized_bedrag(row["netto_totaal"], row["aantal_maanden"]), 2),
+                "jaarbedrag": round(_annualized_bedrag(row["netto_totaal"], venster_maanden), 2),
                 "groei_pct": None,
                 "start_jaar": None,
                 "stop_jaar": None,
@@ -245,6 +293,39 @@ def _sync_voorgestelde_posten(conn, user_id: int, instellingen) -> int:
         )
         added += 1
     return added
+
+
+def _herbereken_posten(conn, user_id: int, instellingen) -> int:
+    """Recomputes jaarbedrag for every existing, category-linked post from
+    the current history window — the counterpart to
+    _sync_voorgestelde_posten, which only adds posts for brand-new
+    combinations and deliberately never touches an existing one. Call this
+    when historie_maanden (or new transaction history) should actually
+    change an already-suggested amount. A manually-added post
+    (afschrift_cat_id NULL, e.g. AOW) has no baseline to recompute from
+    and is never touched; a post whose combination has no baseline
+    activity in the (possibly narrower) new window is left as-is rather
+    than reset to 0 — no data in the window isn't evidence the real
+    annual amount is zero. Only jaarbedrag changes — groei_pct, start/
+    stop_jaar, persoon, actief and omschrijving stay exactly as the user
+    left them (see update_post_bedrag.sql)."""
+    existing = conn.execute(_LIST_POSTEN_SQL, {"user_id": user_id}).fetchall()
+    by_key = {(r["afschrift_cat_id"], r["afschrift_subcat_id"]): r for r in existing if r["afschrift_cat_id"] is not None}
+
+    start, end, venster_maanden = _baseline_venster(conn, user_id, instellingen["historie_maanden"])
+    baseline_rows = conn.execute(
+        _BASELINE_SQL, {"user_id": user_id, "start": start.isoformat(), "end": end.isoformat()}
+    ).fetchall()
+
+    updated = 0
+    for row in baseline_rows:
+        post = by_key.get((row["cat_id"], row["subcat_id"]))
+        if post is None:
+            continue
+        nieuw_bedrag = round(_annualized_bedrag(row["netto_totaal"], venster_maanden), 2)
+        conn.execute(_UPDATE_POST_BEDRAG_SQL, {"id": post["ID"], "user_id": user_id, "jaarbedrag": nieuw_bedrag})
+        updated += 1
+    return updated
 
 
 @router.get("/pensioenplanner/instellingen")
@@ -268,6 +349,8 @@ def instellingen_page(request: Request):
 
         personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
         posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user["id"]}).fetchall()
+        rekening_selectie = _load_rekening_selectie(conn, user["id"])
+        conn.commit()
     finally:
         conn.close()
 
@@ -276,7 +359,7 @@ def instellingen_page(request: Request):
         request, "pensioenplanner_instellingen.html",
         {
             "user": user, "instellingen": _instellingen_display(instellingen), "personen": personen,
-            "groepen": groepen, "losse_posten": losse_posten,
+            "groepen": groepen, "losse_posten": losse_posten, "rekening_selectie": rekening_selectie,
         },
     )
 
@@ -332,6 +415,7 @@ def save_instellingen(
         else:
             personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
             posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user["id"]}).fetchall()
+            rekening_selectie = conn.execute(_LIST_REKENING_SELECTIE_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
@@ -342,7 +426,8 @@ def save_instellingen(
             request, "pensioenplanner_instellingen.html",
             {
                 "user": user, "instellingen": submitted, "personen": personen,
-                "groepen": groepen, "losse_posten": losse_posten, "error": error,
+                "groepen": groepen, "losse_posten": losse_posten, "rekening_selectie": rekening_selectie,
+                "error": error,
             },
             status_code=400,
         )
@@ -384,6 +469,46 @@ def delete_persoon(request: Request, persoon_id: int):
     return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
 
 
+@router.post("/pensioenplanner/rekeningen")
+async def save_rekening_selectie(request: Request):
+    """Saves which of the user's own Rekeningen feed the baseline — same
+    shared-checkbox-group pattern as the posten table's actief_ids (see
+    save_posten below): one request, one "actief" checkbox per Rekening,
+    all sharing the name rekening_ids. Changing the selection immediately
+    recomputes existing, category-linked posten's jaarbedrag (same as
+    clicking "Herbereken bestaande posten") — a (de)selected account
+    changes what the baseline query sees, so leaving old amounts in place
+    until a separate manual click would be a stale, easy-to-miss state."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    form = await request.form()
+    actief_ids = {int(v) for v in form.getlist("rekening_ids")}
+
+    conn = get_connection()
+    try:
+        rekening_selectie = _load_rekening_selectie(conn, user["id"])
+        for row in rekening_selectie:
+            conn.execute(_UPDATE_REKENING_SELECTIE_SQL, {
+                "user_id": user["id"],
+                "rekening_id": row["rekening_id"],
+                "actief": 1 if row["rekening_id"] in actief_ids else 0,
+            })
+        instellingen = conn.execute(_GET_INSTELLINGEN_SQL, {"user_id": user["id"]}).fetchone()
+        updated = 0
+        if instellingen is not None:
+            updated = _herbereken_posten(conn, user["id"], instellingen)
+        conn.commit()
+    finally:
+        conn.close()
+    audit.info(
+        "Pensioenplanner: rekeningselectie opgeslagen en %d post(en) herberekend voor gebruiker %s",
+        updated, user["id"],
+    )
+    return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
+
+
 @router.post("/pensioenplanner/posten")
 def add_post(
     request: Request,
@@ -421,6 +546,7 @@ def add_post(
             instellingen = conn.execute(_GET_INSTELLINGEN_SQL, {"user_id": user["id"]}).fetchone()
             personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
             posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user["id"]}).fetchall()
+            rekening_selectie = conn.execute(_LIST_REKENING_SELECTIE_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
@@ -431,7 +557,8 @@ def add_post(
             request, "pensioenplanner_instellingen.html",
             {
                 "user": user, "instellingen": _instellingen_display(instellingen), "personen": personen,
-                "groepen": groepen, "losse_posten": losse_posten, "error": error,
+                "groepen": groepen, "losse_posten": losse_posten, "rekening_selectie": rekening_selectie,
+                "error": error,
             },
             status_code=400,
         )
@@ -564,6 +691,29 @@ def ververs_posten(request: Request):
     finally:
         conn.close()
     audit.info("Pensioenplanner: %d voorgestelde post(en) ververst voor gebruiker %s", added, user["id"])
+    return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
+
+
+@router.post("/pensioenplanner/posten/herbereken")
+def herbereken_posten(request: Request):
+    """Recomputes existing, category-linked posts' jaarbedrag from the
+    current historie_maanden — see _herbereken_posten's docstring for why
+    this is a separate action from "Ververs voorstellen" (which only adds
+    missing posts, by design, and never updates one already there)."""
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    conn = get_connection()
+    try:
+        instellingen = conn.execute(_GET_INSTELLINGEN_SQL, {"user_id": user["id"]}).fetchone()
+        updated = 0
+        if instellingen is not None:
+            updated = _herbereken_posten(conn, user["id"], instellingen)
+            conn.commit()
+    finally:
+        conn.close()
+    audit.info("Pensioenplanner: %d post(en) herberekend voor gebruiker %s", updated, user["id"])
     return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
 
 

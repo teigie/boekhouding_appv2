@@ -2,11 +2,7 @@
 {% block title %}Boekhouding — Pensioenplanner instellingen{% endblock %}
 {% block content_class %}content--wide{% endblock %}
 {% block content %}
-  <h1>Pensioenplanner — instellingen <span class="badge-wip">in ontwikkeling</span></h1>
-  <p class="muted">
-    Deze pagina is nog in ontwikkeling — de berekening, indeling en
-    aannames kunnen nog veranderen.
-  </p>
+  <h1>Pensioenplanner — instellingen</h1>
   <p class="muted">
     Stel hier je projectiehorizon, vermogen en de posten in die meetellen
     in de <a href="/pensioenplanner">projectie</a>. Voorgestelde posten
@@ -34,6 +30,30 @@
       <button type="submit" style="margin-top: 1rem;">Opslaan</button>
     </form>
   </section>
+
+  {% if rekening_selectie %}
+    <section class="card" style="margin-top: 1.5rem;">
+      <h2>Rekeningen</h2>
+      <p class="muted">
+        Welke van je gekoppelde rekeningen meetellen in de
+        historiebaseline (voorgestelde bedragen, "Ververs voorstellen" en
+        "Herbereken bestaande posten"). Zet bv. een privérekening uit als
+        die niet in de gezamenlijke projectie thuishoort. Opslaan
+        herberekent direct het jaarbedrag van je bestaande, aan een
+        categorie gekoppelde posten — net als de knop "Herbereken
+        bestaande posten" hieronder.
+      </p>
+      <form method="post" action="/pensioenplanner/rekeningen" class="table-actions" style="flex-wrap: wrap; gap: 1rem;">
+        {% for r in rekening_selectie %}
+          <label style="display: flex; align-items: center; gap: 0.35rem;">
+            <input type="checkbox" name="rekening_ids" value="{{ r['rekening_id'] }}" {{ "checked" if r["actief"] }}>
+            {{ r["rekening_naam"] }}
+          </label>
+        {% endfor %}
+        <button type="submit">Opslaan</button>
+      </form>
+    </section>
+  {% endif %}
 
   <section class="card" style="margin-top: 1.5rem;">
     <h2>Personen</h2>
@@ -64,15 +84,24 @@
   <section class="card" style="margin-top: 1.5rem;">
     <div class="table-actions" style="justify-content: space-between; align-items: center;">
       <h2 style="margin: 0;">Posten</h2>
-      <form method="post" action="/pensioenplanner/posten/ververs">
-        <button type="submit" class="chip">Ververs voorstellen</button>
-      </form>
+      <span class="table-actions" style="gap: 0.5rem;">
+        <form method="post" action="/pensioenplanner/posten/ververs">
+          <button type="submit" class="chip">Ververs voorstellen</button>
+        </form>
+        <form method="post" action="/pensioenplanner/posten/herbereken">
+          <button type="submit" class="chip">Herbereken bestaande posten</button>
+        </form>
+      </span>
     </div>
     <p class="muted">
       Posten staan gegroepeerd per hoofdcategorie — klik op een categorie
       om de onderliggende posten te tonen en per stuk aan/uit te zetten.
       Een post zonder categorie (bv. AOW of pensioen) bestaat nog niet in
-      je grootboek en staat los onderaan.
+      je grootboek en staat los onderaan. "Ververs voorstellen" voegt
+      alleen posten toe voor categorieën die nog geen post hebben;
+      "Herbereken bestaande posten" werkt het jaarbedrag van je bestaande
+      posten bij op basis van de historieperiode hierboven, zonder je
+      overige aanpassingen (groei%, start/stop, persoon) te wijzigen.
     </p>
 
     {% if groepen or losse_posten %}
@@ -145,6 +174,19 @@
                   <td colspan="9">
                     <div class="table-scroll">
                       <table class="category-statements">
+                        <thead>
+                          <tr>
+                            <th>Actief</th>
+                            <th>Omschrijving</th>
+                            <th>Persoon</th>
+                            <th class="col-amount">Jaarbedrag (€)</th>
+                            <th>Groei % (leeg = algemeen)</th>
+                            <th>Start jaar / leeftijd</th>
+                            <th>Stop jaar / leeftijd</th>
+                            <th>Eenmalig</th>
+                            <th></th>
+                          </tr>
+                        </thead>
                         <tbody>
                           {% for post in groep.posten %}{{ post_row(post) }}{% endfor %}
                         </tbody>

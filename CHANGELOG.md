@@ -11,6 +11,43 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.5] - 2026-11-05 — Pensioenplanner afgerond
+
+- De pensioenplanner is niet langer gemarkeerd als **in ontwikkeling** —
+  de "in ontwikkeling"-badge is weg uit de navigatiebalk en van boven de
+  pagina's.
+- **Nieuw**: welke van je gekoppelde rekeningen meetellen in de
+  historiebaseline is nu instelbaar op de instellingenpagina (sectie
+  "Rekeningen") — handig als niet elke rekening in de gezamenlijke
+  projectie thuishoort. Wijzigen en opslaan herberekent direct het
+  jaarbedrag van je bestaande, aan een categorie gekoppelde posten.
+- **Nieuw**: knop "Herbereken bestaande posten" — werkt het jaarbedrag
+  van al bestaande posten bij op basis van de huidige historieperiode,
+  los van "Ververs voorstellen" (die alleen posten toevoegt voor
+  categorieën die nog geen post hebben en bestaande posten nooit
+  aanpast).
+- **Fix**: de historieperiode voor voorgestelde bedragen werd geankerd op
+  de datum van vandaag in plaats van je laatste afschrift — bij een
+  account dat een tijd niet is bijgewerkt, telde die hele tussenliggende
+  periode dan onterecht mee als "geen activiteit". De periode wordt nu
+  geankerd op de laatst bekende afschriftdatum, en gedeeld door het
+  werkelijk verstreken aantal maanden in dat venster (niet door hoeveel
+  maanden toevallig een transactie bevatten) — dat laatste overschatte
+  posten die minder dan maandelijks terugkeren (bv. halfjaarlijkse
+  wegenbelasting) flink.
+- **Nieuw**: het startjaar van de projectie is een 0-basis — er wordt dat
+  eerste jaar nog geen rendement over het spaargeld/beleggingen
+  berekend, alleen vanaf het jaar erna.
+- **Fix**: de kolom "Spaargeld" in de jaartabel/grafiek telde het netto
+  resultaat van dat jaar al bij de spaargeldpot op, waardoor "Spaargeld"
+  en "Totaal vermogen" door elkaar liepen. "Spaargeld" toont nu alleen de
+  pot plus rendement; het netto van dat jaar is pas zichtbaar in "Totaal
+  vermogen" (en telt vanaf het jaar erna wel mee in de rendementsbasis
+  van "Spaargeld").
+- **Fix**: de uitgeklapte posten per categorie hadden geen eigen
+  kolomkoppen, waardoor onduidelijk was welke kolom wat toonde — elke
+  uitklaprij toont nu dezelfde kolomkoppen als de hoofdtabel.
+
 ## [0.1.4] - 2026-11-02 — Pensioenplanner (in ontwikkeling)
 
 - **Nieuw**: `/pensioenplanner`, een eerste versie van een jaar-voor-jaar

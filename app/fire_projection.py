@@ -49,9 +49,13 @@ def build_projection(instellingen, posten, personen) -> dict:
     Returns {"jaren": [...], "jaar_geld_op": int | None}. Each entry in
     "jaren" is {"jaar", "leeftijden" ({persoon_id: age}), "inkomsten",
     "uitgaven", "netto", "saldo_spaargeld", "saldo_beleggingen", "totaal"}.
-    "jaar_geld_op" is the first year total vermogen (saldo_spaargeld +
-    saldo_beleggingen) drops below zero, or None if that never happens
-    within the projection horizon.
+    saldo_spaargeld is the savings pot's balance plus that year's
+    rendement only — it deliberately does NOT include that year's own
+    netto cashflow (see the netto/spaargeld_basis split below); netto
+    only shows up in `totaal`, which is therefore NOT simply
+    saldo_spaargeld + saldo_beleggingen. "jaar_geld_op" is the first year
+    `totaal` drops below zero, or None if that never happens within the
+    projection horizon.
     """
     start_jaar = instellingen["start_jaar"]
     eind_jaar = instellingen["eind_jaar"]
@@ -61,7 +65,15 @@ def build_projection(instellingen, posten, personen) -> dict:
 
     actieve_posten = [p for p in posten if p["actief"]]
 
-    saldo_spaargeld = float(instellingen["saldo_spaargeld"])
+    # spaargeld_basis is the actual running savings-pot balance, carried
+    # from year to year (includes every prior year's net cashflow) — it's
+    # never shown directly. The *displayed* saldo_spaargeld for a year is
+    # only that basis after rendement, deliberately BEFORE that year's own
+    # netto is folded in — "Spaargeld" should read as "balance + growth",
+    # not "balance + growth + this year's income/expenses". The net
+    # cashflow only becomes visible in `totaal`, and is then folded into
+    # spaargeld_basis so the next year's growth compounds on top of it.
+    spaargeld_basis = float(instellingen["saldo_spaargeld"])
     saldo_beleggingen = float(instellingen["saldo_beleggingen"])
 
     jaren = []
@@ -77,12 +89,22 @@ def build_projection(instellingen, posten, personen) -> dict:
                 uitgaven += bedrag
         netto = inkomsten - uitgaven
 
-        # Net cashflow lands in the savings pot; investments compound
-        # independently (no automatic transfer between the two pots in
-        # v1 — see docs/ARCHITECTURE.md's pensioenplanner section).
-        saldo_spaargeld = saldo_spaargeld * (1 + rendement_spaargeld) + netto
-        saldo_beleggingen = saldo_beleggingen * (1 + rendement_beleggingen)
-        totaal = saldo_spaargeld + saldo_beleggingen
+        # Investments compound independently (no automatic transfer
+        # between the two pots in v1 — see docs/ARCHITECTURE.md's
+        # pensioenplanner section). start_jaar is a 0-basis: the
+        # configured saldo's are what's in the pot right now, so the
+        # start year itself hasn't earned any rendement yet.
+        if jaar == start_jaar:
+            saldo_spaargeld = spaargeld_basis
+        else:
+            saldo_spaargeld = spaargeld_basis * (1 + rendement_spaargeld)
+            saldo_beleggingen = saldo_beleggingen * (1 + rendement_beleggingen)
+
+        # Net cashflow lands in the savings pot — but only from here on:
+        # it's absorbed into next year's basis, and it's what makes
+        # `totaal` differ from saldo_spaargeld + saldo_beleggingen alone.
+        spaargeld_basis = saldo_spaargeld + netto
+        totaal = spaargeld_basis + saldo_beleggingen
 
         if jaar_geld_op is None and totaal < 0:
             jaar_geld_op = jaar

@@ -53,3 +53,12 @@ create table if not exists fire_posten (
 	foreign key (Afschrift_subcat_ID) references afschrift_subcategorien(ID),
 	foreign key (persoon_ID) references fire_personen(ID) on delete set null
 );
+
+create table if not exists fire_rekening_selectie (
+	user_ID integer not null,
+	Rekening_ID integer not null,
+	actief integer not null default 1 check (actief in (0, 1)),
+	primary key (user_ID, Rekening_ID),
+	foreign key (user_ID) references Users(ID),
+	foreign key (Rekening_ID) references Rekening(ID)
+);
