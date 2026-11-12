@@ -353,3 +353,24 @@ create table fire_rekening_selectie (
 	foreign key (user_ID) references Users(ID),
 	foreign key (Rekening_ID) references Rekening(ID)
 );
+
+-- Freezes what the projection predicted for a year, at the moment of a
+-- save, for every year that wasn't yet "afgesloten" (werkelijk) at that
+-- point — see app/routes/pensioenplanner.py's _update_prognose_snapshot.
+-- Rebased on the latest known werkelijke/lopende cijfers each time (never
+-- a pure, actuals-ignorant chain from the projection's original
+-- start_jaar), so a forecast made after a year has closed already builds
+-- on what actually happened in it. A row for a year that has since
+-- become "werkelijk" is deliberately left untouched by later saves — see
+-- _update_prognose_snapshot's docstring.
+create table fire_prognose_snapshot (
+	user_ID integer not null,
+	jaar integer not null,
+	voorspeld_inkomsten dec(12,2) not null,
+	voorspeld_uitgaven dec(12,2) not null,
+	voorspeld_netto dec(12,2) not null,
+	voorspeld_totaal dec(12,2) not null,
+	updated_at datetime not null,
+	primary key (user_ID, jaar),
+	foreign key (user_ID) references Users(ID)
+);

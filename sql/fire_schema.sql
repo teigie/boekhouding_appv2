@@ -62,3 +62,15 @@ create table if not exists fire_rekening_selectie (
 	foreign key (user_ID) references Users(ID),
 	foreign key (Rekening_ID) references Rekening(ID)
 );
+
+create table if not exists fire_prognose_snapshot (
+	user_ID integer not null,
+	jaar integer not null,
+	voorspeld_inkomsten dec(12,2) not null,
+	voorspeld_uitgaven dec(12,2) not null,
+	voorspeld_netto dec(12,2) not null,
+	voorspeld_totaal dec(12,2) not null,
+	updated_at datetime not null,
+	primary key (user_ID, jaar),
+	foreign key (user_ID) references Users(ID)
+);

@@ -74,14 +74,27 @@
         <tbody>
           {% for j in projectie.jaren %}
             <tr>
-              <td>{{ j["jaar"] }}</td>
+              <td>
+                {{ j["jaar"] }}
+                <br><span class="muted" style="font-size: 0.75rem;">
+                  {{ {"werkelijk": "Werkelijk", "lopend": "Lopend", "voorspelling": "Voorspelling"}[j["stand"]] }}
+                </span>
+              </td>
               {% for p in personen %}<td>{{ j["leeftijden"][p["ID"]] }}</td>{% endfor %}
               <td class="col-amount amount-bij">€ {{ j["inkomsten"]|bedrag_nl }}</td>
               <td class="col-amount amount-af">€ {{ j["uitgaven"]|bedrag_nl }}</td>
               <td class="col-amount {{ 'amount-bij' if j['netto'] >= 0 else 'amount-af' }}">€ {{ j["netto"]|bedrag_nl }}</td>
               <td class="col-amount">€ {{ j["saldo_spaargeld"]|bedrag_nl }}</td>
               <td class="col-amount">€ {{ j["saldo_beleggingen"]|bedrag_nl }}</td>
-              <td class="col-amount {{ 'amount-af' if j['totaal'] < 0 else '' }}">€ {{ j["totaal"]|bedrag_nl }}</td>
+              <td class="col-amount {{ 'amount-af' if j['totaal'] < 0 else '' }}">
+                € {{ j["totaal"]|bedrag_nl }}
+                {% if j["voorspeld_totaal"] is not none %}
+                  <br><span class="muted" style="font-size: 0.75rem;">
+                    voorspeld € {{ j["voorspeld_totaal"]|bedrag_nl }}
+                    (<span class="{{ 'amount-bij' if j['verschil_totaal'] >= 0 else 'amount-af' }}">{{ "+" if j["verschil_totaal"] >= 0 }}€ {{ j["verschil_totaal"]|bedrag_nl }}</span>)
+                  </span>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

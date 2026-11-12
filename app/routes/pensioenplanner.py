@@ -62,6 +62,12 @@ _LIST_REKENING_SELECTIE_SQL = (
 _UPDATE_REKENING_SELECTIE_SQL = (
     SQL_DIR / "queries" / "fire" / "update_rekening_selectie.sql"
 ).read_text(encoding="utf-8")
+_UPSERT_PROGNOSE_SNAPSHOT_SQL = (
+    SQL_DIR / "queries" / "fire" / "upsert_prognose_snapshot.sql"
+).read_text(encoding="utf-8")
+_LIST_PROGNOSE_SNAPSHOT_SQL = (
+    SQL_DIR / "queries" / "fire" / "list_prognose_snapshot_for_user.sql"
+).read_text(encoding="utf-8")
 
 _INSTELLINGEN_URL = "/pensioenplanner/instellingen"
 
@@ -253,6 +259,113 @@ def _baseline_venster(conn, user_id: int, historie_maanden: int) -> tuple[date, 
     return start, end, venster_maanden
 
 
+def _laatste_jaar_met_data(conn, user_id: int) -> Optional[int]:
+    """The calendar year of the last known afschrift date among the
+    user's SELECTED Rekeningen (same source as _baseline_venster) — the
+    boundary between a "werkelijk"/"lopend" year and a pure
+    "voorspelling" year, see _werkelijke_jaartotalen."""
+    bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user_id}).fetchone()
+    max_datum = bounds["max_datum"] if bounds else None
+    return date.fromisoformat(max_datum).year if max_datum else None
+
+
+def _werkelijke_jaartotalen(conn, user_id: int, posten, start_jaar: int) -> dict:
+    """Per jaar from start_jaar through the last year with real
+    grootboekdata: the net total for every actieve, categorie-gekoppelde
+    post's (categorie, subcategorie) combination in that single calendar
+    year — "werkelijk" for a fully elapsed year, or extrapolated from
+    cijfers tot nu toe ("lopend") for the year containing the last known
+    afschrift date. Reuses the exact same baseline query + annualisation
+    as the historie-gebaseerde voorstellen (_BASELINE_SQL/
+    _annualized_bedrag) — for a full calendar year (venster_maanden == 12)
+    that's simply the real total; for the lopend year it's the same
+    extrapolation already used elsewhere. Returns
+    {jaar: {"inkomsten", "uitgaven", "stand"}} — see
+    app/fire_projection.py::build_projection for how this is consumed.
+    Losse posten (geen categoriekoppeling) are deliberately not considered
+    here — they never have grootboekdata to fall back on, see
+    build_projection's own docstring."""
+    bounds = conn.execute(_DATE_BOUNDS_SQL, {"user_id": user_id}).fetchone()
+    max_datum = bounds["max_datum"] if bounds else None
+    if max_datum is None:
+        return {}
+    laatste_afschrift = date.fromisoformat(max_datum)
+    laatste_jaar = laatste_afschrift.year
+
+    gekoppelde_posten = [p for p in posten if p["actief"] and p["afschrift_cat_id"] is not None]
+
+    resultaat = {}
+    for jaar in range(start_jaar, laatste_jaar + 1):
+        start = date(jaar, 1, 1)
+        end = laatste_afschrift if jaar == laatste_jaar else date(jaar, 12, 31)
+        venster_maanden = len(month_range(start, end))
+        baseline_rows = conn.execute(
+            _BASELINE_SQL, {"user_id": user_id, "start": start.isoformat(), "end": end.isoformat()}
+        ).fetchall()
+        by_key = {(row["cat_id"], row["subcat_id"]): row["netto_totaal"] for row in baseline_rows}
+
+        inkomsten = 0.0
+        uitgaven = 0.0
+        for post in gekoppelde_posten:
+            netto_totaal = by_key.get((post["afschrift_cat_id"], post["afschrift_subcat_id"]), 0.0)
+            bedrag = _annualized_bedrag(netto_totaal, venster_maanden)
+            if post["type"] == "Inkomsten":
+                inkomsten += bedrag
+            else:
+                uitgaven += bedrag
+
+        resultaat[jaar] = {
+            "inkomsten": inkomsten,
+            "uitgaven": uitgaven,
+            "stand": "lopend" if jaar == laatste_jaar else "werkelijk",
+        }
+    return resultaat
+
+
+def _update_prognose_snapshot(conn, user_id: int) -> None:
+    """Freezes this save's projection for every year that isn't
+    "werkelijk" yet (lopend of voorspelling) — the reference point later
+    shown next to that year's eventual werkelijke cijfers ("hoe ver zat de
+    laatste voorspelling ernaast", see
+    sql/queries/fire/upsert_prognose_snapshot.sql). Rebased on the latest
+    known werkelijke/lopende cijfers (same _werkelijke_jaartotalen the
+    live page uses), not a pure, actuals-ignorant chain from the
+    projection's original start_jaar — once a year closes, every later
+    save's forecast for the years after it should build on what actually
+    happened, not keep re-deriving that closed year hypothetically from
+    scratch. A year that's already werkelijk is left alone: whatever was
+    frozen the last time IT was still open is the prediction to keep
+    comparing against, not something this save should overwrite. Called
+    at the end of every route that changes instellingen/posten/personen/
+    rekeningselectie, right before its own conn.commit().
+
+    LET OP: de "rebase on the latest known werkelijke cijfers" hierboven is
+    tot nu toe alleen getest met kunstmatig teruggedateerde testdata (zie
+    testdata voor TestReinald, toegevoegd 2026-11), nooit met een jaar dat
+    via een écht verstrijkende kalender afsloot. Controleer begin 2027 (of
+    zodra een jaar voor het eerst in het echt "werkelijk" wordt) of de
+    voorspelling voor het jaar erna inderdaad klopt rebaset op de dan
+    bekende werkelijke cijfers, en geen fout bevat die de kunstmatige test
+    niet aan het licht bracht."""
+    instellingen = conn.execute(_GET_INSTELLINGEN_SQL, {"user_id": user_id}).fetchone()
+    if instellingen is None:
+        return
+    personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user_id}).fetchall()
+    posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user_id}).fetchall()
+    laatste_jaar_met_data = _laatste_jaar_met_data(conn, user_id)
+    werkelijke_jaartotalen = _werkelijke_jaartotalen(conn, user_id, posten, instellingen["start_jaar"])
+
+    projectie = build_projection(instellingen, posten, personen, werkelijke_jaartotalen)
+    for j in projectie["jaren"]:
+        if laatste_jaar_met_data is not None and j["jaar"] < laatste_jaar_met_data:
+            continue
+        conn.execute(_UPSERT_PROGNOSE_SNAPSHOT_SQL, {
+            "user_id": user_id, "jaar": j["jaar"],
+            "voorspeld_inkomsten": j["inkomsten"], "voorspeld_uitgaven": j["uitgaven"],
+            "voorspeld_netto": j["netto"], "voorspeld_totaal": j["totaal"],
+        })
+
+
 def _sync_voorgestelde_posten(conn, user_id: int, instellingen) -> int:
     """Adds a fire_post for every (categorie, subcategorie) combination
     with historical activity in the configured history window that
@@ -411,6 +524,7 @@ def save_instellingen(
                 "saldo_spaargeld": parsed_spaargeld, "rendement_spaargeld_pct": rendement_spaargeld_pct,
                 "saldo_beleggingen": parsed_beleggingen, "rendement_beleggingen_pct": rendement_beleggingen_pct,
             })
+            _update_prognose_snapshot(conn, user["id"])
             conn.commit()
         else:
             personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
@@ -446,6 +560,7 @@ def add_persoon(request: Request, naam: str = Form(...), geboortejaar: int = For
     try:
         if naam:
             conn.execute(_ADD_PERSOON_SQL, {"user_id": user["id"], "naam": naam, "geboortejaar": geboortejaar})
+            _update_prognose_snapshot(conn, user["id"])
             conn.commit()
     finally:
         conn.close()
@@ -462,6 +577,7 @@ def delete_persoon(request: Request, persoon_id: int):
     conn = get_connection()
     try:
         conn.execute(_REMOVE_PERSOON_SQL, {"id": persoon_id, "user_id": user["id"]})
+        _update_prognose_snapshot(conn, user["id"])
         conn.commit()
     finally:
         conn.close()
@@ -499,6 +615,7 @@ async def save_rekening_selectie(request: Request):
         updated = 0
         if instellingen is not None:
             updated = _herbereken_posten(conn, user["id"], instellingen)
+        _update_prognose_snapshot(conn, user["id"])
         conn.commit()
     finally:
         conn.close()
@@ -541,6 +658,7 @@ def add_post(
                 "jaarbedrag": _parse_amount_nl_or(jaarbedrag, 0.0),
                 "groei_pct": None, "start_jaar": None, "stop_jaar": None, "eenmalig": 0, "actief": 1,
             })
+            _update_prognose_snapshot(conn, user["id"])
             conn.commit()
         else:
             instellingen = conn.execute(_GET_INSTELLINGEN_SQL, {"user_id": user["id"]}).fetchone()
@@ -613,6 +731,7 @@ async def save_posten(request: Request):
                 "actief": 1 if str(pid) in actief_ids else 0,
             })
             saved += 1
+        _update_prognose_snapshot(conn, user["id"])
         conn.commit()
     finally:
         conn.close()
@@ -649,6 +768,7 @@ def duplicate_post(request: Request, post_id: int):
             "eenmalig": post["eenmalig"],
             "actief": post["actief"],
         })
+        _update_prognose_snapshot(conn, user["id"])
         conn.commit()
     finally:
         conn.close()
@@ -665,6 +785,7 @@ def delete_post(request: Request, post_id: int):
     conn = get_connection()
     try:
         conn.execute(_DELETE_POST_SQL, {"id": post_id, "user_id": user["id"]})
+        _update_prognose_snapshot(conn, user["id"])
         conn.commit()
     finally:
         conn.close()
@@ -687,6 +808,7 @@ def ververs_posten(request: Request):
         added = 0
         if instellingen is not None:
             added = _sync_voorgestelde_posten(conn, user["id"], instellingen)
+            _update_prognose_snapshot(conn, user["id"])
             conn.commit()
     finally:
         conn.close()
@@ -710,11 +832,27 @@ def herbereken_posten(request: Request):
         updated = 0
         if instellingen is not None:
             updated = _herbereken_posten(conn, user["id"], instellingen)
+            _update_prognose_snapshot(conn, user["id"])
             conn.commit()
     finally:
         conn.close()
     audit.info("Pensioenplanner: %d post(en) herberekend voor gebruiker %s", updated, user["id"])
     return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
+
+
+def _merge_prognose_vergelijking(jaren: list, snapshot_rows) -> None:
+    """Attaches voorspeld_totaal/verschil_totaal to each year that's no
+    longer a pure voorspelling and has a frozen snapshot from before it
+    became werkelijk/lopend (see _update_prognose_snapshot) — mutates
+    jaren in place. A year with no snapshot (e.g. it was already werkelijk
+    before this feature existed) or that's still a pure voorspelling
+    itself gets None for both, so the template/CSV export can simply
+    check "is not none"."""
+    snapshot_by_jaar = {row["jaar"]: row for row in snapshot_rows}
+    for j in jaren:
+        snap = snapshot_by_jaar.get(j["jaar"]) if j["stand"] != "voorspelling" else None
+        j["voorspeld_totaal"] = snap["voorspeld_totaal"] if snap else None
+        j["verschil_totaal"] = (j["totaal"] - snap["voorspeld_totaal"]) if snap else None
 
 
 def _projection_chart(projectie: dict):
@@ -751,10 +889,13 @@ def pensioenplanner_page(request: Request):
             return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
         personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
         posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user["id"]}).fetchall()
+        werkelijke_jaartotalen = _werkelijke_jaartotalen(conn, user["id"], posten, instellingen["start_jaar"])
+        snapshot_rows = conn.execute(_LIST_PROGNOSE_SNAPSHOT_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
-    projectie = build_projection(instellingen, posten, personen)
+    projectie = build_projection(instellingen, posten, personen, werkelijke_jaartotalen)
+    _merge_prognose_vergelijking(projectie["jaren"], snapshot_rows)
     chart = _projection_chart(projectie) if projectie["jaren"] else None
 
     return templates.TemplateResponse(
@@ -779,23 +920,30 @@ def export_csv(request: Request):
             return RedirectResponse(_INSTELLINGEN_URL, status_code=303)
         personen = conn.execute(_LIST_PERSONEN_SQL, {"user_id": user["id"]}).fetchall()
         posten = conn.execute(_LIST_POSTEN_SQL, {"user_id": user["id"]}).fetchall()
+        werkelijke_jaartotalen = _werkelijke_jaartotalen(conn, user["id"], posten, instellingen["start_jaar"])
+        snapshot_rows = conn.execute(_LIST_PROGNOSE_SNAPSHOT_SQL, {"user_id": user["id"]}).fetchall()
     finally:
         conn.close()
 
-    projectie = build_projection(instellingen, posten, personen)
+    projectie = build_projection(instellingen, posten, personen, werkelijke_jaartotalen)
+    _merge_prognose_vergelijking(projectie["jaren"], snapshot_rows)
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow(
         ["Jaar"] + [f"Leeftijd {p['naam']}" for p in personen]
-        + ["Inkomsten", "Uitgaven", "Netto", "Spaargeld", "Beleggingen", "Totaal vermogen"]
+        + ["Stand", "Inkomsten", "Uitgaven", "Netto", "Spaargeld", "Beleggingen", "Totaal vermogen",
+           "Voorspeld totaal vermogen", "Verschil met voorspelling"]
     )
     for j in projectie["jaren"]:
         writer.writerow(
             [j["jaar"]] + [j["leeftijden"][p["ID"]] for p in personen] + [
+                j["stand"].capitalize(),
                 format_amount_nl(j["inkomsten"]), format_amount_nl(j["uitgaven"]), format_amount_nl(j["netto"]),
                 format_amount_nl(j["saldo_spaargeld"]), format_amount_nl(j["saldo_beleggingen"]),
                 format_amount_nl(j["totaal"]),
+                format_amount_nl(j["voorspeld_totaal"]) if j["voorspeld_totaal"] is not None else "",
+                format_amount_nl(j["verschil_totaal"]) if j["verschil_totaal"] is not None else "",
             ]
         )
 

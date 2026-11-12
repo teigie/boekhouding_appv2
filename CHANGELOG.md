@@ -11,6 +11,31 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.6] - 2026-11-12 — Pensioenplanner: werkelijk vs. voorspelling
+
+- **Nieuw**: een jaar waar al (deels) grootboekdata van bestaat, gebruikt
+  in de pensioenplanner-jaartabel niet langer de groeivoorspelling maar
+  "Werkelijk" (een volledig afgesloten jaar) of "Lopend" (het huidige
+  jaar, geëxtrapoleerd vanaf wat er al bekend is) — alleen een jaar dat
+  nog moet komen blijft "Voorspelling". Losse posten zonder
+  categoriekoppeling (bv. AOW) blijven in elk jaar gewoon de normale
+  voorspelling gebruiken — daar bestaat nooit grootboekdata van.
+- **Nieuw**: bij elke save wordt de dan geldende voorspelling voor elk nog
+  niet afgesloten jaar vastgelegd. Zodra zo'n jaar later werkelijk wordt,
+  toont "Totaal" in de jaartabel die vastgelegde voorspelling ernaast,
+  inclusief het verschil met wat het uiteindelijk werd. Elke latere save
+  herberekent de voorspelling voor nog open jaren steeds opnieuw, gebaseerd
+  op de laatst bekende werkelijke/lopende cijfers (niet op een vaste
+  aanname vanaf het allereerste startjaar) — een jaar dat al werkelijk is
+  geworden wordt nooit meer overschreven.
+- **Fix**: het geconfigureerde rendementpercentage werd ook toegepast op
+  een al afgesloten ("werkelijk") jaar, terwijl daar geen apart bijgehouden
+  werkelijk rendement tegenover staat — zo'n jaar geeft zijn pot nu
+  ongewijzigd door (alleen het netto van dat jaar komt er nog bij); alleen
+  een nog lopend/voorspellend jaar past rendement nog toe.
+- Uitlegpagina (`/uitleg`) aangevuld met een sectie over de
+  pensioenplanner.
+
 ## [0.1.5] - 2026-11-05 — Pensioenplanner afgerond
 
 - De pensioenplanner is niet langer gemarkeerd als **in ontwikkeling** —

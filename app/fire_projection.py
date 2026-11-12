@@ -39,31 +39,52 @@ def _bedrag_voor_jaar(post, jaar: int, default_start: int, default_stop: int, al
     return float(post["jaarbedrag"]) * ((1 + groei / 100) ** jaren_sinds_start)
 
 
-def build_projection(instellingen, posten, personen) -> dict:
+def build_projection(instellingen, posten, personen, werkelijke_jaartotalen: Optional[dict] = None) -> dict:
     """instellingen: a fire_instellingen row. posten: fire_posten rows
     (actief=0 rows are skipped entirely — excluded from the projection,
     not merely hidden). personen: fire_personen rows, used only to derive
     a per-year age column for display; the projection math itself never
     reads geboortejaar.
 
+    werkelijke_jaartotalen: optional {jaar: {"inkomsten", "uitgaven",
+    "stand"}}, pre-computed in app/routes/pensioenplanner.py (this module
+    stays pure calculation, no DB access — see the module docstring) from
+    real grootboekdata for a year that's already "werkelijk" (fully
+    afgesloten) or "lopend" (extrapolated from cijfers tot nu toe). For a
+    year with an entry here, its "inkomsten"/"uitgaven" replace what every
+    actieve, categorie-gekoppelde post would otherwise contribute — a
+    "losse" post (afschrift_cat_id NULL, e.g. AOW/pensioen) never has real
+    grootboekdata to fall back on, so it's always still added via the
+    normal groei-projectie on top, regardless of stand. Pass None (the
+    default) to get the old, pure-projection behavior for every year.
+
     Returns {"jaren": [...], "jaar_geld_op": int | None}. Each entry in
-    "jaren" is {"jaar", "leeftijden" ({persoon_id: age}), "inkomsten",
-    "uitgaven", "netto", "saldo_spaargeld", "saldo_beleggingen", "totaal"}.
-    saldo_spaargeld is the savings pot's balance plus that year's
-    rendement only — it deliberately does NOT include that year's own
-    netto cashflow (see the netto/spaargeld_basis split below); netto
-    only shows up in `totaal`, which is therefore NOT simply
-    saldo_spaargeld + saldo_beleggingen. "jaar_geld_op" is the first year
-    `totaal` drops below zero, or None if that never happens within the
-    projection horizon.
+    "jaren" is {"jaar", "stand", "leeftijden" ({persoon_id: age}),
+    "inkomsten", "uitgaven", "netto", "saldo_spaargeld",
+    "saldo_beleggingen", "totaal"}. "stand" is "werkelijk", "lopend" or
+    "voorspelling". saldo_spaargeld is the savings pot's balance plus that
+    year's rendement only (skipped for a "werkelijk" year — see below) —
+    it deliberately does NOT include that year's own netto cashflow (see
+    the netto/spaargeld_basis split below); netto only shows up in
+    `totaal`, which is therefore NOT simply saldo_spaargeld +
+    saldo_beleggingen. A "werkelijk" year carries its pots over unchanged
+    (no rendement applied) — the app has no separate record of what the
+    pot's real return was that year, so assuming rendement_pct for an
+    already-afgesloten year would present an assumption as fact; only a
+    still-open year (lopend/voorspelling) uses rendement_pct as its best
+    available estimate. "jaar_geld_op" is the first year `totaal` drops
+    below zero, or None if that never happens within the projection
+    horizon.
     """
     start_jaar = instellingen["start_jaar"]
     eind_jaar = instellingen["eind_jaar"]
     algemeen_groei_pct = instellingen["algemeen_groei_pct"]
     rendement_spaargeld = instellingen["rendement_spaargeld_pct"] / 100
     rendement_beleggingen = instellingen["rendement_beleggingen_pct"] / 100
+    werkelijke_jaartotalen = werkelijke_jaartotalen or {}
 
     actieve_posten = [p for p in posten if p["actief"]]
+    losse_actieve_posten = [p for p in actieve_posten if p["afschrift_cat_id"] is None]
 
     # spaargeld_basis is the actual running savings-pot balance, carried
     # from year to year (includes every prior year's net cashflow) — it's
@@ -79,22 +100,41 @@ def build_projection(instellingen, posten, personen) -> dict:
     jaren = []
     jaar_geld_op: Optional[int] = None
     for jaar in range(start_jaar, eind_jaar + 1):
-        inkomsten = 0.0
-        uitgaven = 0.0
-        for post in actieve_posten:
-            bedrag = _bedrag_voor_jaar(post, jaar, start_jaar, eind_jaar, algemeen_groei_pct)
-            if post["type"] == "Inkomsten":
-                inkomsten += bedrag
-            else:
-                uitgaven += bedrag
+        werkelijk = werkelijke_jaartotalen.get(jaar)
+        if werkelijk is not None:
+            inkomsten = werkelijk["inkomsten"]
+            uitgaven = werkelijk["uitgaven"]
+            stand = werkelijk["stand"]
+            for post in losse_actieve_posten:
+                bedrag = _bedrag_voor_jaar(post, jaar, start_jaar, eind_jaar, algemeen_groei_pct)
+                if post["type"] == "Inkomsten":
+                    inkomsten += bedrag
+                else:
+                    uitgaven += bedrag
+        else:
+            inkomsten = 0.0
+            uitgaven = 0.0
+            stand = "voorspelling"
+            for post in actieve_posten:
+                bedrag = _bedrag_voor_jaar(post, jaar, start_jaar, eind_jaar, algemeen_groei_pct)
+                if post["type"] == "Inkomsten":
+                    inkomsten += bedrag
+                else:
+                    uitgaven += bedrag
         netto = inkomsten - uitgaven
 
         # Investments compound independently (no automatic transfer
         # between the two pots in v1 — see docs/ARCHITECTURE.md's
         # pensioenplanner section). start_jaar is a 0-basis: the
         # configured saldo's are what's in the pot right now, so the
-        # start year itself hasn't earned any rendement yet.
-        if jaar == start_jaar:
+        # start year itself hasn't earned any rendement yet. A "werkelijk"
+        # (fully afgesloten) year gets no assumed rendement either — the
+        # app has no separate record of what the pot's real return was
+        # that year, so applying rendement_pct to it would silently turn
+        # an assumption into something presented as fact; only a still-
+        # open year (lopend/voorspelling) uses rendement_pct as its best
+        # available estimate.
+        if jaar == start_jaar or stand == "werkelijk":
             saldo_spaargeld = spaargeld_basis
         else:
             saldo_spaargeld = spaargeld_basis * (1 + rendement_spaargeld)
@@ -111,6 +151,7 @@ def build_projection(instellingen, posten, personen) -> dict:
 
         jaren.append({
             "jaar": jaar,
+            "stand": stand,
             "leeftijden": {p["ID"]: jaar - p["geboortejaar"] for p in personen},
             "inkomsten": inkomsten,
             "uitgaven": uitgaven,
