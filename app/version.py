@@ -194,14 +194,29 @@ def apply_update(app: FastAPI) -> None:
     """
     before = _run_git("rev-parse", "HEAD")
 
-    result = subprocess.run(
-        ["git", "pull", "--ff-only", _REMOTE, _BRANCH], cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only", _REMOTE, _BRANCH], cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise UpdateApplyError(f"git pull kon niet uitgevoerd worden: {exc}") from exc
+    log.info(
+        "git pull exited %d. stdout: %s | stderr: %s",
+        result.returncode, result.stdout.strip(), result.stderr.strip(),
     )
     if result.returncode != 0:
         raise UpdateApplyError(result.stderr.strip() or result.stdout.strip() or "git pull failed")
 
     after = _run_git("rev-parse", "HEAD")
     audit.info("Update pulled: %s -> %s", before, after)
+    if before is None or after is None or before == after:
+        # Pull "succeeded" but HEAD didn't move: restarting would just
+        # bring the same version back up with the banner still showing.
+        # Surface it on the error page instead of pretending it worked.
+        raise UpdateApplyError(
+            "git pull gaf geen fout, maar de versie is niet veranderd "
+            f"(HEAD {before} -> {after}). git-uitvoer: {result.stdout.strip() or result.stderr.strip()}"
+        )
 
     if before and after and before != after:
         changed = subprocess.run(
