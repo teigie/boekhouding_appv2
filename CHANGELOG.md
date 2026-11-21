@@ -11,9 +11,23 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
-## [0.1.9] - 2026-11-21 — Fix: updatemelding op Windows 2
+## [0.1.9] - 2026-11-21 — Fix: "Nu bijwerken" deed niets vanaf het inlogscherm
 
-- **Check**: de updatemelding gaat goed, maar er wordt nog niks gepulled wanneer dat wel zou moeten. DIt moet nog gerepareerd worden.
+- **Fix**: de updatemelding staat op elke pagina, ook op het
+  inlogscherm — en daar kom je na een (her)start altijd als eerste
+  terecht. "Nu bijwerken" vereiste echter een ingelogde gebruiker; zonder
+  login stuurde de app je stil terug naar het inlogscherm, zonder dat er
+  iets gepulled werd (en dus ook niets in `audit.log`). Bijwerken werkt nu
+  ook zonder ingelogd te zijn — "inloggen" is in deze app toch geen
+  beveiliging (geen wachtwoorden).
+- **Fix**: als `git pull` geen fout geeft maar de versie niet verandert,
+  toont de app nu de foutpagina "Bijwerken mislukt" (met de uitvoer van
+  git) in plaats van te herstarten op dezelfde versie. Een vastgelopen
+  pull (timeout) geeft ook die foutpagina i.p.v. een serverfout. De
+  volledige uitvoer van `git pull` komt in `app.log`.
+- Let op: een installatie van vóór deze versie moet nog één keer
+  handmatig bijgewerkt worden (`git pull origin main`), of eerst inloggen
+  en dán op "Nu bijwerken" klikken.
 
 ## [0.1.8] - 2026-11-21 — Fix: updatemelding op Windows
 

@@ -6,10 +6,8 @@ banner markup, live elsewhere (see app/version.py's module docstring for
 the full picture).
 """
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
 
 from app.logging_config import get_app_logger
-from app.session import require_login
 from app.templating import templates
 from app.version import UpdateApplyError, apply_update
 
@@ -31,14 +29,16 @@ def update_apply(request: Request):
     a small error page with the reason instead of guessing which page to
     re-render, since the banner can be triggered from anywhere.
     """
-    user = require_login(request)
-    if isinstance(user, RedirectResponse):
-        return user
-
+    # Deliberately no require_login: the banner is rendered by base.html
+    # on every page, the login page included — right after a (re)start
+    # the launcher lands on /login, so that's exactly where the user
+    # first sees it. Requiring a session here silently bounced that
+    # click back to /login with nothing pulled. "Login" isn't an auth
+    # boundary in this app anyway (no passwords, see app/session.py).
     try:
         apply_update(request.app)
     except UpdateApplyError as exc:
-        log.warning("Update failed for user %s: %s", user["id"], exc)
+        log.warning("Update failed: %s", exc)
         return templates.TemplateResponse(request, "update_failed.html", {"error": str(exc)}, status_code=500)
 
     return templates.TemplateResponse(request, "update_pending.html", {})
