@@ -38,7 +38,7 @@ log = get_app_logger()
 audit = get_audit_logger()
 
 _CHANGELOG_PATH = BASE_DIR / "CHANGELOG.md"
-_VERSION_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2}) — (.+)$", re.MULTILINE)
+_VERSION_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2}) [-–—] (.+)$", re.MULTILINE)
 _REMOTE = "origin"
 _BRANCH = "main"
 

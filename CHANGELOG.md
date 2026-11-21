@@ -11,7 +11,7 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
-## [0.1.7] - 2026-11-15 - Pensioenplanner af
+## [0.1.7] - 2026-11-15 — Pensioenplanner af
 
 - **Nieuw**: pensioenplanner is af, er moet alleen nog getest worden bij een nieuw jaar of de jaarprognoses worden geupdate.
 
