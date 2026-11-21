@@ -11,6 +11,10 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.12] - 2026-11-21 — Test: automatisch bijwerken test
+
+-**Test**: test 2 dat de server nu ook herstart.
+
 ## [0.1.11] - 2026-11-21 — Test: automatisch bijwerken test
 
 -**Test**: test test
