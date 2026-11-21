@@ -11,6 +11,26 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.8] - 2026-11-21 — Fix: updatemelding op Windows
+
+- **Fix**: op Windows verscheen nooit een updatemelding. De update-check
+  las de changelog van GitHub in met de Windows-standaardcodering
+  (cp1252) in plaats van UTF-8; een emoji in deze changelog (☀️) bevat
+  een byte die cp1252 niet kent, waardoor de check crashte. Omdat die
+  check onzichtbaar op de achtergrond draait, verdween die fout zonder
+  melding of logregel. Alle git-aanroepen in `app/version.py` lezen de
+  uitvoer nu expliciet als UTF-8.
+- **Fix**: een crash in de update-check wordt nu gelogd in `app.log`
+  (`Update check crashed`), en na elke geslaagde check staat er een
+  regel `Update check done: ...` — zo is altijd te zien of de check
+  gedraaid heeft.
+- **Fix**: de kop van 0.1.7 had een gewoon streepje i.p.v. "—" vóór de
+  titel, waardoor die versie onzichtbaar was voor de update-check. De
+  check accepteert voortaan `-`, `–` en `—`.
+- Let op: een Windows-installatie van vóór deze versie moet nog één keer
+  handmatig bijgewerkt worden (`git pull origin main` in de app-map, met
+  de app afgesloten) — de oude code kan de melding zelf niet tonen.
+
 ## [0.1.7] - 2026-11-15 — Pensioenplanner af
 
 - **Nieuw**: pensioenplanner is af, er moet alleen nog getest worden bij een nieuw jaar of de jaarprognoses worden geupdate.
