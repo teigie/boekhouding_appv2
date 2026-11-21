@@ -15,6 +15,20 @@ daarna is in het Nederlands.
 
 -**Test**: test test
 
+## [0.1.11] - 2026-11-21 — Fix: server herstart niet na "Nu bijwerken"
+
+- **Fix**: na "Nu bijwerken" werd de update wel binnengehaald, maar kwam
+  de server niet meer terug. Twee oorzaken, beide opgelost in `run.py`:
+  - De vervangende server startte terwijl de oude de poort nog bezet
+    hield; op Windows mislukt dat direct en stopte de nieuwe server. Hij
+    wacht nu (max. 20 seconden) tot de poort vrij is.
+  - De vervangende server wordt onzichtbaar gestart (`pythonw.exe`) en
+    had daardoor geen stdout/stderr; uvicorn crashte daarop al tijdens
+    het opstarten. Die uitvoer gaat nu naar
+    `logs/launcher-stdout.log` en `logs/launcher-stderr.log`.
+- Omdat dit in `run.py` zit (het bestand dat ná de pull gestart wordt),
+  werkt het al bij het bijwerken vanaf 0.1.10 naar deze versie.
+
 ## [0.1.10] - 2026-11-21 — Test: automatisch bijwerken
 
 - **Test**: geen codewijzigingen. Deze versie bestaat alleen om te testen
