@@ -96,7 +96,7 @@ def _run_git(*args: str, timeout: float = 10.0) -> Optional[str]:
     "nothing new", per this module's docstring."""
     try:
         result = subprocess.run(
-            ["git", *args], cwd=BASE_DIR, capture_output=True, text=True, timeout=timeout,
+            ["git", *args], cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log.info("Update check skipped (git %s failed to run: %s)", args[0] if args else "?", exc)
@@ -157,7 +157,16 @@ def refresh_update_check() -> None:
     (the launcher scripts, or this very update mechanism) is the natural
     point to check again."""
     global _cached_update_info
-    _cached_update_info = check_for_update()
+    try:
+        _cached_update_info = check_for_update()
+    except Exception:
+        # Runs as a fire-and-forget task (app/main.py): an exception here
+        # would otherwise vanish without a trace, leaving no banner and
+        # nothing in the log to explain why.
+        log.exception("Update check crashed")
+        _cached_update_info = None
+        return
+    log.info("Update check done: %s", "update available" if _cached_update_info else "up to date")
     if _cached_update_info:
         log.info(
             "Update available: %s -> %s (%d entr%s missed)",
@@ -186,7 +195,7 @@ def apply_update(app: FastAPI) -> None:
     before = _run_git("rev-parse", "HEAD")
 
     result = subprocess.run(
-        ["git", "pull", "--ff-only", _REMOTE, _BRANCH], cwd=BASE_DIR, capture_output=True, text=True, timeout=30,
+        ["git", "pull", "--ff-only", _REMOTE, _BRANCH], cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     if result.returncode != 0:
         raise UpdateApplyError(result.stderr.strip() or result.stdout.strip() or "git pull failed")
@@ -196,7 +205,7 @@ def apply_update(app: FastAPI) -> None:
 
     if before and after and before != after:
         changed = subprocess.run(
-            ["git", "diff", "--name-only", before, after], cwd=BASE_DIR, capture_output=True, text=True, timeout=10,
+            ["git", "diff", "--name-only", before, after], cwd=BASE_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         if changed.returncode == 0 and "requirements.txt" in changed.stdout.split():
             log.info("requirements.txt changed by the update — running pip install")
