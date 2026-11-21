@@ -2,6 +2,7 @@
 /data/*.db
 /data/*.sqlite3
 /data/*.db-journal
+/data/*.db.*
 
 # Session-signing secret (generated on first run — see app/session.py)
 /data/.session_secret
