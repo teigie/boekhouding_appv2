@@ -11,6 +11,12 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.10] - 2026-11-21 — Test: automatisch bijwerken
+
+- **Test**: geen codewijzigingen. Deze versie bestaat alleen om te testen
+  of "Nu bijwerken" in de updatemelding (ook vanaf het inlogscherm, en op
+  Windows) daadwerkelijk pullt en de app herstart op de nieuwe versie.
+
 ## [0.1.9] - 2026-11-21 — Fix: "Nu bijwerken" deed niets vanaf het inlogscherm
 
 - **Fix**: de updatemelding staat op elke pagina, ook op het
