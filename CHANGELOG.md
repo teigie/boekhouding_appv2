@@ -11,6 +11,22 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.14] - 2026-11-21 — Fix: herstart na bijwerken via bewakingsproces
+
+- **Fix**: de server kwam na "Nu bijwerken" op Windows nog steeds niet
+  terug — de vervangende server die de oude server zelf (onzichtbaar,
+  losgekoppeld) opstartte, kwam niet eens tot opstarten. Dat losse
+  opstarten is nu weg. In plaats daarvan is `run.py` in launcher-modus
+  een klein bewakingsproces dat de eigenlijke server als kind-proces
+  draait: na een update stopt de server met een speciale exitcode, en
+  het bewakingsproces start hem daarna gewoon opnieuw (met de net
+  binnengehaalde code). De oude server is dan al volledig gestopt, dus
+  de poort is ook vrij. Stopt de server om een andere reden
+  (inactiviteit, crash), dan stopt het bewakingsproces ook.
+- Let op: de update náár deze versie gebeurt nog met de oude code, dus de
+  app komt daarna nog één keer niet vanzelf terug — start hem dan via de
+  snelkoppeling. Vanaf deze versie herstart hij na een update vanzelf.
+
 ## [0.1.13] - 2026-11-21 — Test: automatisch bijwerken test
 
 -**Test**: test 3 dat de server nu ook herstart.

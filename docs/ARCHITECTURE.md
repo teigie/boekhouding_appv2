@@ -640,15 +640,21 @@ lokale wijzigingen, niet voor een eindgebruiker die de code nooit
 aanraakt), gevolgd door `pip install -r requirements.txt` als dat
 bestand is meegewijzigd. Herstarten verschilt per manier van draaien:
 
-- **Launcher-modus** (`BOEKHOUDING_RELOAD=0`, `start_app.sh`/`.bat`/`.ps1`,
-  zie hierboven) heeft één enkel, aanspreekbaar `uvicorn.Server`-object op
-  `app.state.uvicorn_server` (hetzelfde haakje als `app/idle_shutdown.py`
-  al gebruikt). Omdat de launcher-scripts de server maar één keer starten
-  (bij de dubbelklik) en daarna niets meer bewaken, spawnt `apply_update`
-  zelf eerst een vervangend `python run.py`-proces (losgekoppeld,
-  cross-platform via `subprocess.Popen`) vóórdat hij de huidige server
-  vraagt te stoppen (`should_exit = True`) — anders blijft de gebruiker
-  na een succesvolle update zonder draaiende server achter.
+- **Launcher-modus** (`BOEKHOUDING_RELOAD=0`, `start_app.sh`/`.bat`,
+  zie hierboven): `run.py` is hier een klein bewakingsproces dat de
+  eigenlijke server als kind-proces draait (zelfde script, met
+  `BOEKHOUDING_SERVER_CHILD=1`). Dat kind heeft één aanspreekbaar
+  `uvicorn.Server`-object op `app.state.uvicorn_server` (hetzelfde
+  haakje als `app/idle_shutdown.py` gebruikt). `apply_update` zet
+  `app.state.restart_requested` en vraagt de server te stoppen
+  (`should_exit = True`); het kind stopt dan met exitcode 3, en het
+  bewakingsproces start een nieuw kind met de net binnengehaalde code.
+  Elke andere exitcode (inactiviteit, crash) laat ook het
+  bewakingsproces stoppen. Vóór 0.1.14 startte `apply_update` zelf een
+  losgekoppeld vervangend proces; op Windows (`pythonw.exe`) kwam dat
+  nooit op, vandaar deze opzet. Let op: na een update draait het
+  bewakingsproces zelf nog de oude code, dus wijzigingen aan het
+  bewakingsdeel van `run.py` werken pas na een handmatige herstart.
 - **Dev-modus** (`python run.py`, `reload=True`) heeft zo'n aanspreekbaar
   server-object niet — de eigenlijke app draait in een door uvicorn
   bewaakt subproces. Daar is niets extra's nodig: de `.py`-bestanden die

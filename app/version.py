@@ -22,7 +22,6 @@ The overall flow (see docs/ARCHITECTURE.md for the full design):
   (`POST /update/apply`, app/routes/update.py) — pulls, reinstalls
   dependencies if requirements.txt changed, and restarts the server.
 """
-import os
 import re
 import subprocess
 import sys
@@ -239,17 +238,13 @@ def apply_update(app: FastAPI) -> None:
         log.info("Update applied in --reload mode; the file watcher will restart the app on its own.")
         return
 
-    # Launcher mode (BOEKHOUDING_RELOAD=0, start_app.sh/.bat/): once
-    # this server exits, nothing brings it back — the launcher script only
-    # starts it once, at the initial double-click. So the replacement
-    # process has to be spawned here, before asking this one to stop, or
-    # the user is left with no server at all.
-    env = os.environ.copy()
-    popen_kwargs = {}
-    if os.name == "nt":
-        popen_kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        popen_kwargs["start_new_session"] = True
-    subprocess.Popen([sys.executable, "run.py"], cwd=BASE_DIR, env=env, **popen_kwargs)
-    audit.info("Spawned replacement server process after update")
+    # Launcher mode (BOEKHOUDING_RELOAD=0, start_app.sh/.bat): this server
+    # runs as the child of run.py's supervisor process. Flag the restart
+    # and stop; run.py's child exits with RESTART_EXIT_CODE once uvicorn
+    # has fully shut down (port released), and the supervisor then starts
+    # a fresh child that loads the code just pulled. Deliberately no
+    # self-spawned replacement process anymore: on Windows a detached
+    # pythonw.exe spawned from here never came up.
+    app.state.restart_requested = True
+    audit.info("Restart requested after update")
     server.should_exit = True
