@@ -11,6 +11,10 @@ tonen wat je gemist hebt sinds je laatste versie. Entries tot en met
 0.0.29 zijn in het Engels geschreven, van vóór deze afspraak — alles
 daarna is in het Nederlands.
 
+## [0.1.9] - 2026-11-21 — Fix: updatemelding op Windows 2
+
+- **Check**: de updatemelding gaat goed, maar er wordt nog niks gepulled wanneer dat wel zou moeten. DIt moet nog gerepareerd worden.
+
 ## [0.1.8] - 2026-11-21 — Fix: updatemelding op Windows
 
 - **Fix**: op Windows verscheen nooit een updatemelding. De update-check
